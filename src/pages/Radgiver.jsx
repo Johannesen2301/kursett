@@ -123,9 +123,7 @@ export default function Radgiver() {
   const [tekst, setTekst] = useState('')
   const [venter, setVenter] = useState(false)
   const [feil, setFeil] = useState('')
-  const [proSperre, setProSperre] = useState(false)
-  const [proEpost, setProEpost] = useState('')
-  const [proSendt, setProSendt] = useState(false)
+  const [grense, setGrense] = useState(false)
   const enden = useRef(null)
 
   useEffect(() => { enden.current?.scrollIntoView({ behavior: 'smooth' }) }, [meldinger, venter])
@@ -183,7 +181,7 @@ export default function Radgiver() {
         body: { melding: q, historikk: meldinger, grunnlag },
       })
       if (error) throw error
-      if (data?.proGrense) { setProSperre(true); setVenter(false); return }
+      if (data?.proGrense) { setGrense(true); setVenter(false); return }
       if (data?.feil) throw new Error(data.feil)
       setMeldinger([...nye, { rolle: 'assistent', tekst: data.svar }])
     } catch (e) {
@@ -232,23 +230,11 @@ export default function Radgiver() {
             </div>
           )}
 
-          {proSperre && (
+          {grense && (
             <div className="ass-pro">
-              <div className="ass-pro-tittel">Du har brukt de gratis spørsmålene</div>
-              <p>
-                Rådgiveren er gratis med noen spørsmål i timen. Med <b>Kursett Pro</b> får du
-                ubegrenset tilgang — for 79 kr/mnd.
-              </p>
-              <div className="ass-pro-status">Pro er ikke lansert ennå. Legg igjen e-posten din, så sier vi fra når den er klar.</div>
-              {proSendt ? (
-                <div className="ass-pro-takk">Takk — vi sier fra når Pro er klar. 🌱</div>
-              ) : (
-                <form className="ass-pro-form" onSubmit={(e) => { e.preventDefault(); if (proEpost.includes('@')) setProSendt(true) }}>
-                  <input type="email" value={proEpost} onChange={(e) => setProEpost(e.target.value)} placeholder="din@epost.no" />
-                  <button>Gi meg beskjed</button>
-                </form>
-              )}
-              <div className="ass-pro-fot">Eller kom tilbake om en time — det er gratis.</div>
+              <div className="ass-pro-tittel">Du har brukt opp spørsmålene for denne timen</div>
+              <p>Rådgiveren har en grense på noen spørsmål i timen for å holde driftskostnadene nede.</p>
+              <div className="ass-pro-fot">Kom tilbake om en time — det er fortsatt helt gratis.</div>
             </div>
           )}
 
@@ -260,11 +246,11 @@ export default function Radgiver() {
           <input
             value={tekst}
             onChange={(e) => setTekst(e.target.value)}
-            placeholder={proSperre ? 'Kom tilbake om en time' : 'Spør om porteføljen eller skatten din …'}
+            placeholder={grense ? 'Kom tilbake om en time' : 'Spør om porteføljen eller skatten din …'}
             maxLength={1000}
-            disabled={proSperre || laster}
+            disabled={grense || laster}
           />
-          <button disabled={venter || proSperre || laster || !tekst.trim()} aria-label="Send">
+          <button disabled={venter || grense || laster || !tekst.trim()} aria-label="Send">
             <svg viewBox="0 0 24 24" fill="none" strokeWidth="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg>
           </button>
         </form>

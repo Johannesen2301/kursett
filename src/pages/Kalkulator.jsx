@@ -47,8 +47,9 @@ export default function Kalkulator() {
 
   useEffect(() => {
     if (!user) { setPosisjoner([]); return }
-    supabase.from('posisjoner').select('id, navn, antall, gav').order('markedsverdi', { ascending: false })
-      .then(({ data }) => setPosisjoner((data || []).filter((p) => p.gav != null && p.antall != null)))
+    supabase.from('posisjoner').select('id, navn, antall, gav, konto, konto_type').order('markedsverdi', { ascending: false })
+      .then(({ data }) => setPosisjoner((data || [])
+        .filter((p) => p.gav != null && p.antall != null && p.konto_type !== 'ask')))
   }, [user])
 
   function velgPosisjon(id) {
@@ -203,7 +204,7 @@ export default function Kalkulator() {
                   <select className="kalk-select" value={valgtPosisjonId} onChange={(e) => velgPosisjon(e.target.value)}>
                     <option value="">— velg en importert posisjon —</option>
                     {posisjoner.map((p) => (
-                      <option key={p.id} value={p.id}>{p.navn} ({p.antall} stk)</option>
+                      <option key={p.id} value={p.id}>{p.navn} ({p.antall} stk{p.konto ? ', ' + p.konto : ''})</option>
                     ))}
                   </select>
                   {kostprisKilde === 'import' && (
@@ -306,7 +307,7 @@ export default function Kalkulator() {
                   <select className="kalk-select" value={salgValgtPosisjonId} onChange={(e) => velgSalgPosisjon(e.target.value)}>
                     <option value="">— velg en importert posisjon —</option>
                     {posisjoner.map((p) => (
-                      <option key={p.id} value={p.id}>{p.navn} ({p.antall} stk)</option>
+                      <option key={p.id} value={p.id}>{p.navn} ({p.antall} stk{p.konto ? ', ' + p.konto : ''})</option>
                     ))}
                   </select>
                   {salgKostprisKilde === 'import' && (

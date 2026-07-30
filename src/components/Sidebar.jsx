@@ -38,7 +38,7 @@ export default function Sidebar() {
             <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7">
               <path d={item.icon} />
             </svg>
-            <span className="rtip">{item.label}{item.pro ? ' · Pro' : ''}</span>
+            <span className="rtip">{item.label}</span>
             {antallFor(item.to) > 0 && (
               <span className="varsel-boble">{antallFor(item.to) > 9 ? '9+' : antallFor(item.to)}</span>
             )}

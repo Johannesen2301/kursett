@@ -102,7 +102,7 @@ export default function MinSkatt() {
     [skjermingRader]
   )
 
-  const { rader, utenKostpris } = useMemo(
+  const { rader, utenKostpris, ikkeVPS } = useMemo(
     () => beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt }),
     [posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt]
   )
@@ -349,6 +349,13 @@ export default function MinSkatt() {
         <div className="muted-note">
           {utenKostpris.length} posisjon{utenKostpris.length > 1 ? 'er' : ''} mangler kostpris (GAV) i importen og
           er ikke tatt med: {utenKostpris.map((p) => p.navn).join(', ')}.
+        </div>
+      )}
+
+      {type === 'vps' && ikkeVPS.length > 0 && (
+        <div className="muted-note">
+          {ikkeVPS.length} posisjon{ikkeVPS.length > 1 ? 'er' : ''} ligger på en konto merket ASK og regnes ut i
+          ASK-fanen i stedet: {ikkeVPS.map((p) => p.navn).join(', ')}.
         </div>
       )}
 

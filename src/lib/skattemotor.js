@@ -42,8 +42,12 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
   const skjermingMap = new Map((skjermingRader || []).map((r) => [r.noekkel, r]))
   const rader = []
   const utenKostpris = []
+  const ikkeVPS = []
 
   for (const p of posisjoner || []) {
+    // Eldre importerte posisjoner mangler konto_type — de behandles som VPS for
+    // bakoverkompatibilitet (alt ble antatt VPS før flere-kontoer-støtten kom).
+    if (p.konto_type === 'ask') { ikkeVPS.push(p); continue }
     if (p.antall == null) continue
     if (p.gav == null) { utenKostpris.push(p); continue }
 
@@ -97,7 +101,7 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
       verdiNaa, harLivePris, g,
     })
   }
-  return { rader, utenKostpris }
+  return { rader, utenKostpris, ikkeVPS }
 }
 
 export async function hentSkjermingRader(supabase) {

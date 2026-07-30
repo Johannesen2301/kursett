@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { parseNordnetCSV } from '../lib/nordnet'
@@ -19,6 +19,8 @@ export default function Portefolje() {
   const [prisFeil, setPrisFeil] = useState('')
   const [sistOppdatert, setSistOppdatert] = useState(null)
   const [importStatus, setImportStatus] = useState('')
+  const [nyKontoNavn, setNyKontoNavn] = useState('VPS')
+  const [nyKontoType, setNyKontoType] = useState('vps')
 
   async function lastPosisjoner() {
     setLasterData(true)
@@ -39,23 +41,50 @@ export default function Portefolje() {
 
   async function handleFile(e) {
     const file = e.target.files?.[0]; if (!file) return
+    const kontoNavn = nyKontoNavn.trim() || 'VPS'
     setFeil(''); setImportStatus(''); setImporterer(true)
     try {
       const buf = await file.arrayBuffer()
       const { positions } = parseNordnetCSV(buf)
-      const rader = positions.map((p) => ({ bruker_id: user.id, navn: p.navn, isin: p.isin, ticker: null, sektor: finnSektor(p.navn), antall: p.antall, markedsverdi: p.markedsverdi, gav: p.gav, konto: file.name }))
-      const { data: slettet, error: delErr } = await supabase.from('posisjoner').delete().eq('bruker_id', user.id).select('id')
+      const rader = positions.map((p) => ({
+        bruker_id: user.id, navn: p.navn, isin: p.isin, ticker: null, sektor: finnSektor(p.navn),
+        antall: p.antall, markedsverdi: p.markedsverdi, gav: p.gav, konto: kontoNavn, konto_type: nyKontoType,
+      }))
+      // Sletter KUN posisjoner på denne kontoen — andre importerte kontoer (f.eks.
+      // en ASK ved siden av en VPS) skal ikke røres.
+      const { data: slettet, error: delErr } = await supabase.from('posisjoner').delete()
+        .eq('bruker_id', user.id).eq('konto', kontoNavn).select('id')
       if (delErr) throw new Error(delErr.message)
       const { error: insErr } = await supabase.from('posisjoner').insert(rader)
       if (insErr) throw new Error(insErr.message)
       const d = await lastPosisjoner(); oppdaterPriser(d)
       setImportStatus(
-        `Fila hadde ${positions.length} rad(er). Slettet ${slettet?.length ?? 0} gamle posisjon(er), ` +
-        `la til ${rader.length} nye. Du har nå ${d.length} posisjon(er) totalt.`
+        `Fila hadde ${positions.length} rad(er) for kontoen «${kontoNavn}». Slettet ${slettet?.length ?? 0} gamle ` +
+        `posisjon(er) på denne kontoen, la til ${rader.length} nye. Du har nå ${d.length} posisjon(er) totalt på tvers av alle kontoer.`
       )
     } catch (err) { setFeil(err.message) }
     finally { setImporterer(false); if (fileRef.current) fileRef.current.value = '' }
   }
+
+  function startImportForKonto(navn, type) {
+    setNyKontoNavn(navn)
+    setNyKontoType(type || 'vps')
+    fileRef.current?.click()
+  }
+
+  const pf = useMemo(() => beregnPortefolje(posisjoner, prisdata), [posisjoner, prisdata])
+
+  const kontoer = useMemo(() => {
+    const map = new Map()
+    for (const p of pf.posisjoner) {
+      const navn = p.konto || 'Ukjent konto'
+      if (!map.has(navn)) map.set(navn, { navn, type: p.konto_type || 'vps', antall: 0, verdi: 0 })
+      const g = map.get(navn)
+      g.antall++
+      g.verdi += p.liveVerdi || 0
+    }
+    return [...map.values()]
+  }, [pf])
 
   if (lasterData) return (<div className="page"><div className="page-head"><h1>Min portefølje</h1></div><div className="muted-note">Laster …</div></div>)
 
@@ -67,20 +96,25 @@ export default function Portefolje() {
         <h2>Importer porteføljen din</h2>
         <p>Last opp «aksjelister»-CSV-en fra Nordnet, så viser vi sammensetningen din som et sektorfarget bånd — ditt eget fingeravtrykk.</p>
         {feil && <div className="import-feil">{feil}</div>}
+        <div className="konto-velger">
+          <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder="Kontonavn, f.eks. VPS Nordnet" />
+          <select className="kalk-select konto-type-select" value={nyKontoType} onChange={(e) => setNyKontoType(e.target.value)}>
+            <option value="vps">Vanlig konto (VPS)</option>
+            <option value="ask">Aksjesparekonto (ASK)</option>
+          </select>
+        </div>
         <button className="btn" disabled={importerer} onClick={() => fileRef.current?.click()}>{importerer ? 'Importerer …' : 'Velg CSV-fil'}</button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={handleFile} />
         <div className="import-hint">Nordnet → Depot → Beholdning → last ned som CSV.</div>
       </div>
     </div>)
 
-  const pf = beregnPortefolje(posisjoner, prisdata)
   return (
     <div className="page">
       <div className="page-head page-head-row">
         <div><h1>Min portefølje</h1><p className="page-sub">{pf.antall} posisjoner · {pf.harLive ? 'live kurser ' + (sistOppdatert ? sistOppdatert.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }) : '') : 'verdier fra import'}</p></div>
         <div style={{ display: 'flex', gap: 9 }}>
           <button className="btn ghost" disabled={oppdaterer} onClick={() => oppdaterPriser(posisjoner)}>{oppdaterer ? 'Oppdaterer …' : 'Oppdater kurser'}</button>
-          <button className="btn ghost" disabled={importerer} onClick={() => fileRef.current?.click()}>{importerer ? 'Importerer …' : 'Importer på nytt'}</button>
         </div>
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={handleFile} />
       </div>
@@ -93,6 +127,42 @@ export default function Portefolje() {
         <div className="metric"><div className="k">Urealisert</div><div className={'v ' + (pf.gevinst == null ? '' : pf.gevinst >= 0 ? 'up' : 'down')}>{pf.gevinst == null ? '–' : formaterKr(pf.gevinst)}</div><div className="d">{pf.gevinstPst == null ? 'GAV mangler i fila' : formaterPst(pf.gevinstPst, true)}</div></div>
         <div className="metric"><div className="k">Posisjoner</div><div className="v">{pf.antall}</div><div className="d">{pf.sektorer.length} sektorer</div></div>
       </div>
+      <div className="panel">
+        <div className="panel-h"><h2>Kontoer</h2><span className="hint">Importer flere kontoer uten at de sletter hverandre</span></div>
+        <table className="holdings" style={{ marginBottom: 18 }}>
+          <thead><tr><th>Konto</th><th>Type</th><th className="r">Posisjoner</th><th className="r">Verdi</th><th></th></tr></thead>
+          <tbody>
+            {kontoer.map((k) => (
+              <tr key={k.navn}>
+                <td><span className="nm">{k.navn}</span></td>
+                <td>{k.type === 'ask' ? 'Aksjesparekonto (ASK)' : 'Vanlig konto (VPS)'}</td>
+                <td className="r mono">{k.antall}</td>
+                <td className="r mono">{formaterKr(k.verdi)}</td>
+                <td className="r">
+                  <button type="button" className="btn ghost" style={{ padding: '6px 12px', fontSize: 13 }}
+                    disabled={importerer} onClick={() => startImportForKonto(k.navn, k.type)}>
+                    Importer på nytt
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="konto-velger">
+          <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder="Kontonavn, f.eks. ASK Nordnet" />
+          <select className="kalk-select konto-type-select" value={nyKontoType} onChange={(e) => setNyKontoType(e.target.value)}>
+            <option value="vps">Vanlig konto (VPS)</option>
+            <option value="ask">Aksjesparekonto (ASK)</option>
+          </select>
+          <button className="btn ghost" disabled={importerer} onClick={() => fileRef.current?.click()}>
+            {importerer ? 'Importerer …' : 'Legg til konto'}
+          </button>
+        </div>
+        <div className="import-hint" style={{ marginTop: 8 }}>
+          Skriv inn samme kontonavn som en konto over for å erstatte den, eller et nytt navn for å legge til en ny konto ved siden av.
+        </div>
+      </div>
+
       <div className="panel">
         <div className="panel-h"><h2>Sammensetning</h2><span className="hint">Hold over et felt</span></div>
         <Band sektorer={pf.sektorer} />
