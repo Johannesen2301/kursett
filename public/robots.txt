@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /skatteregler
+Allow: /skjermingsfradrag
+Disallow: /app
+Disallow: /login
+
+Sitemap: https://kursett.no/sitemap.xml

@@ -1,0 +1,11 @@
+node_modules
+dist
+dist.zip
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.claude
+Obsidian.lnk
+type
