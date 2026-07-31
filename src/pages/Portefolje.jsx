@@ -7,6 +7,30 @@ import { beregnPortefolje, formaterKr, formaterPst } from '../lib/portfolio'
 import { hentPriser } from '../lib/prices'
 import Band from '../components/Band'
 
+function KontoVelgerFelt({ nyKontoNavn, setNyKontoNavn, nyKontoType, endreKontoType, vpsBekreftet, setVpsBekreftet, navnPlaceholder }) {
+  return (
+    <>
+      <div className="konto-velger">
+        <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder={navnPlaceholder} />
+        <select className="kalk-select konto-type-select" value={nyKontoType} onChange={(e) => endreKontoType(e.target.value)}>
+          <option value="vps">Vanlig konto (VPS)</option>
+          <option value="ask">Aksjesparekonto (ASK)</option>
+        </select>
+      </div>
+      {nyKontoType === 'vps' && (
+        <label className="konto-vps-bekreft">
+          <input type="checkbox" checked={vpsBekreftet} onChange={(e) => setVpsBekreftet(e.target.checked)} />
+          <span>
+            Jeg bekrefter at dette er en vanlig aksjekonto (VPS), der kostpris brukes som
+            skjermingsgrunnlag — ikke en aksjesparekonto (ASK). Velger du feil her, kan
+            skattetallet i Min skatt bli galt uten varsel.
+          </span>
+        </label>
+      )}
+    </>
+  )
+}
+
 export default function Portefolje() {
   const { user } = useAuth()
   const fileRef = useRef(null)
@@ -21,8 +45,18 @@ export default function Portefolje() {
   const [importStatus, setImportStatus] = useState('')
   const [nyKontoNavn, setNyKontoNavn] = useState('VPS')
   const [nyKontoType, setNyKontoType] = useState('vps')
+  const [vpsBekreftet, setVpsBekreftet] = useState(false)
   const [slettKontoNavn, setSlettKontoNavn] = useState(null)
   const [sletterKonto, setSletterKonto] = useState(false)
+
+  // VPS kjører en automatisk, konkret skatteberegning (kostpris som skjermingsgrunnlag) —
+  // ASK utelates bare fra Min skatt til brukeren sjekker det. Feilmerking i VPS-retning
+  // kan derfor gi et stille, galt skattetall, mens feilmerking i ASK-retning bare gir en
+  // manglende beregning. Krev derfor en bevisst bekreftelse KUN for VPS.
+  function endreKontoType(type) {
+    setNyKontoType(type)
+    setVpsBekreftet(false)
+  }
 
   async function lastPosisjoner() {
     setLasterData(true)
@@ -44,6 +78,15 @@ export default function Portefolje() {
   async function handleFile(e) {
     const file = e.target.files?.[0]; if (!file) return
     const kontoNavn = nyKontoNavn.trim() || 'VPS'
+    // Sikkerhetssperre: VPS skal aldri importeres uten bekreftelse, uansett hvilken
+    // knapp som trigget filvalget. Knappene er allerede disabled i dette tilfellet,
+    // så dette bør aldri inntreffe i praksis — men stopper importen i stedet for å
+    // stille lagre en potensielt feilmerket konto, om det likevel skjer.
+    if (nyKontoType === 'vps' && !vpsBekreftet) {
+      setFeil('Du må bekrefte at dette er en VPS-konto før du kan importere den.')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     setFeil(''); setImportStatus(''); setImporterer(true)
     try {
       const buf = await file.arrayBuffer()
@@ -65,13 +108,17 @@ export default function Portefolje() {
         `posisjon(er) på denne kontoen, la til ${rader.length} nye. Du har nå ${d.length} posisjon(er) totalt på tvers av alle kontoer.`
       )
     } catch (err) { setFeil(err.message) }
-    finally { setImporterer(false); if (fileRef.current) fileRef.current.value = '' }
+    finally { setImporterer(false); setVpsBekreftet(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
   function startImportForKonto(navn, type) {
     setNyKontoNavn(navn)
     setNyKontoType(type || 'vps')
-    fileRef.current?.click()
+    setVpsBekreftet(false)
+    // ASK er det myke, friksjonsfrie valget — hopp rett til filvalg som før.
+    // VPS krever en bevisst bekreftelse først, så her lar vi brukeren se og
+    // huke av boksen i skjemaet under, i stedet for å hoppe forbi den.
+    if (type !== 'vps') fileRef.current?.click()
   }
 
   async function slettKonto(navn) {
@@ -114,14 +161,16 @@ export default function Portefolje() {
         <h2>Importer porteføljen din</h2>
         <p>Last opp en CSV med aksjebeholdningen din fra megleren din (f.eks. Nordnet eller DNB), så viser vi sammensetningen din som et sektorfarget bånd — ditt eget fingeravtrykk.</p>
         {feil && <div className="import-feil">{feil}</div>}
-        <div className="konto-velger">
-          <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder="Kontonavn, f.eks. VPS Nordnet" />
-          <select className="kalk-select konto-type-select" value={nyKontoType} onChange={(e) => setNyKontoType(e.target.value)}>
-            <option value="vps">Vanlig konto (VPS)</option>
-            <option value="ask">Aksjesparekonto (ASK)</option>
-          </select>
-        </div>
-        <button className="btn" disabled={importerer} onClick={() => fileRef.current?.click()}>{importerer ? 'Importerer …' : 'Velg CSV-fil'}</button>
+        <KontoVelgerFelt
+          nyKontoNavn={nyKontoNavn} setNyKontoNavn={setNyKontoNavn}
+          nyKontoType={nyKontoType} endreKontoType={endreKontoType}
+          vpsBekreftet={vpsBekreftet} setVpsBekreftet={setVpsBekreftet}
+          navnPlaceholder="Kontonavn, f.eks. VPS Nordnet"
+        />
+        <button className="btn" disabled={importerer || (nyKontoType === 'vps' && !vpsBekreftet)}
+          onClick={() => fileRef.current?.click()}>
+          {importerer ? 'Importerer …' : 'Velg CSV-fil'}
+        </button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={handleFile} />
         <div className="import-hint">
           Nordnet: Depot → Beholdning → last ned som CSV. Andre meglere: se etter «eksporter»/«last ned» på
@@ -176,16 +225,17 @@ export default function Portefolje() {
             ))}
           </tbody>
         </table>
-        <div className="konto-velger">
-          <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder="Kontonavn, f.eks. ASK Nordnet" />
-          <select className="kalk-select konto-type-select" value={nyKontoType} onChange={(e) => setNyKontoType(e.target.value)}>
-            <option value="vps">Vanlig konto (VPS)</option>
-            <option value="ask">Aksjesparekonto (ASK)</option>
-          </select>
-          <button className="btn ghost" disabled={importerer} onClick={() => fileRef.current?.click()}>
-            {importerer ? 'Importerer …' : 'Legg til konto'}
-          </button>
-        </div>
+        <KontoVelgerFelt
+          nyKontoNavn={nyKontoNavn} setNyKontoNavn={setNyKontoNavn}
+          nyKontoType={nyKontoType} endreKontoType={endreKontoType}
+          vpsBekreftet={vpsBekreftet} setVpsBekreftet={setVpsBekreftet}
+          navnPlaceholder="Kontonavn, f.eks. ASK Nordnet"
+        />
+        <button className="btn ghost" style={{ marginTop: 10 }}
+          disabled={importerer || (nyKontoType === 'vps' && !vpsBekreftet)}
+          onClick={() => fileRef.current?.click()}>
+          {importerer ? 'Importerer …' : 'Legg til konto'}
+        </button>
         <div className="import-hint" style={{ marginTop: 8 }}>
           Skriv inn samme kontonavn som en konto over for å erstatte den, eller et nytt navn for å legge til en ny konto ved siden av.
         </div>
