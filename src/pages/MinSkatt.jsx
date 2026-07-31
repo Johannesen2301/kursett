@@ -375,11 +375,19 @@ export default function MinSkatt() {
                     <td><div className="tick"><span className="nm">{x.navn}</span></div></td>
                     <td className="r mono">{kr(x.r.inngangsverdi)}</td>
                     <td className="r mono" onClick={(e) => e.stopPropagation()}>
-                      <TallInput
-                        verdi={x.utbytteFelt}
-                        onChange={(v) => setUtbytteOverstyrt((s) => ({ ...s, [x.noekkel]: v }))}
-                        placeholder="0"
-                      />
+                      <span className="motor-utbytte-felt">
+                        <TallInput
+                          verdi={x.utbytteFelt}
+                          onChange={(v) => setUtbytteOverstyrt((s) => ({ ...s, [x.noekkel]: v }))}
+                          placeholder="0"
+                        />
+                        {x.fantData && !x.dekkerHeleAaret && (
+                          <span
+                            className="motor-ufullstendig-merke"
+                            title={`Utbyttehistorikken dekker bare 12 måneder tilbake i tid — kan mangle utbetalinger tidlig i ${SISTE_AAR} for akkurat denne aksjen. Sjekk mot årsoppgaven fra megler.`}
+                          >!</span>
+                        )}
+                      </span>
                     </td>
                     <td className="r mono" onClick={(e) => e.stopPropagation()}>
                       <TallInput

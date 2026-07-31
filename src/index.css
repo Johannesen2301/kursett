@@ -115,6 +115,8 @@ a{color:inherit;text-decoration:none}
 .motor-input{width:100px;border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-family:'JetBrains Mono';font-size:13px;text-align:right;background:#fff;color:var(--ink)}
 .motor-input:focus{outline:none;border-color:var(--teal-deep)}
 .motor-sql{background:#0F2027;color:#CFEAE9;font-family:'JetBrains Mono';font-size:12.5px;line-height:1.6;padding:16px 18px;border-radius:10px;overflow-x:auto;margin-top:12px;white-space:pre}
+.motor-utbytte-felt{display:inline-flex;align-items:center;gap:5px}
+.motor-ufullstendig-merke{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#FFF8EC;border:1px solid #F0E0C0;color:#B5862F;font-size:11px;font-weight:700;font-family:inherit;cursor:help;flex:0 0 auto}
 .konto-velger{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:14px 0}
 .konto-navn-input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink)}
 .konto-navn-input:focus{outline:none;border-color:var(--teal-deep)}
