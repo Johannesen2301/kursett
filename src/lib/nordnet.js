@@ -39,10 +39,15 @@ export function parseNordnetCSV(buf){
     const markedsverdi=lotter.reduce((s,p)=>s+(p.markedsverdi||0),0)
     const gavSum=lotter.reduce((s,p)=>s+(p.gav!=null&&p.antall!=null?p.gav*p.antall:0),0)
     const gavAntall=lotter.reduce((s,p)=>s+(p.gav!=null&&p.antall!=null?p.antall:0),0)
+    // Hvis noen, men ikke alle, lotter mangler GAV, vet vi ikke total kostpris for
+    // hele posisjonen — et vektet snitt av bare de kjente lottene ville gitt et
+    // stille galt (for lavt eller høyt) kostpris-tall når det ganges med full antall.
+    // Da er det tryggere å utelate GAV helt for posisjonen enn å gjette.
+    const alleHarGav=gavAntall===antall
     return {
       navn:lotter[0].navn, isin:lotter[0].isin,
       antall:antall||null, markedsverdi,
-      gav:gavAntall>0?gavSum/gavAntall:null,
+      gav:(gavAntall>0&&alleHarGav)?gavSum/gavAntall:null,
     }
   })
   return { positions }

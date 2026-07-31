@@ -98,6 +98,22 @@ describe('parseNordnetCSV — sammenslåing av flere lot-rader (regresjonstest)'
     expect(positions[0].antall).toBe(15)
   })
 
+  it('utelater GAV for posisjonen når noen, men ikke alle, lotter mangler GAV (regresjonstest)', () => {
+    // Før denne fiksen ble GAV regnet som et vektet snitt av KUN lottene som
+    // hadde GAV, men ganget med FULL antall (inkl. lotten uten GAV) lenger nede
+    // i portfolio.js. Det ga et stille galt kostpris-tall. Med fiksen skal hele
+    // posisjonens GAV bli null i stedet for å gjette.
+    const csv = csvBuf([
+      'Verdipapir;ISIN;Antall;Sluttkurs;Markedsverdi;GAV',
+      'BlueNord;NO0010828585;100;520;52000;50',
+      'BlueNord;NO0010828585;50;520;26000;',
+    ])
+    const { positions } = parseNordnetCSV(csv)
+    expect(positions).toHaveLength(1)
+    expect(positions[0].antall).toBe(150)
+    expect(positions[0].gav).toBeNull()
+  })
+
   it('kaster en tydelig feil når ingen rader har en verdi over null', () => {
     const csv = csvBuf(['Verdipapir;Antall;Markedsverdi', 'Tom posisjon;0;0'])
     expect(() => parseNordnetCSV(csv)).toThrow(/Fant ingen posisjoner/)
