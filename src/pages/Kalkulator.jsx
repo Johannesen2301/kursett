@@ -213,7 +213,7 @@ export default function Kalkulator() {
                         <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
                       </svg>
                       <div>
-                        Kostprisen er hentet fra GAV i din Nordnet-import og er ikke kvalitetssikret av Kursett.
+                        Kostprisen er hentet fra GAV i din import og er ikke kvalitetssikret av Kursett.
                         Kontroller alltid tallet mot kontoutskriften din før du bruker det i skattemeldingen —
                         du er selv ansvarlig for at opplysningene i skattemeldingen din er riktige.
                       </div>
@@ -247,7 +247,7 @@ export default function Kalkulator() {
                   <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg>
                   <div>
                     <label>Regn ut fra kontoutdrag</label>
-                    <div className="kalk-hjelp">Last opp transaksjonseksporten fra Nordnet, så regner vi ut laveste innskuddssaldo automatisk.</div>
+                    <div className="kalk-hjelp">Last opp transaksjonseksporten fra megleren din, så regner vi ut laveste innskuddssaldo automatisk.</div>
                   </div>
                 </div>
                 <button type="button" className="btn ghost" onClick={() => askFileRef.current?.click()}>
@@ -272,7 +272,7 @@ export default function Kalkulator() {
                       <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
                       <div>
                         Dette forutsetter at feltet over er riktig saldo rett før {askTransaksjoner.forsteDato}, og at fila
-                        dekker resten av {SISTE_AAR} uten hull. Interne overføringer mellom dine egne Nordnet-kontoer telles
+                        dekker resten av {SISTE_AAR} uten hull. Interne overføringer mellom dine egne kontoer telles
                         ikke med. Kursett kvalitetssikrer ikke dette tallet — kontroller alltid mot kontoutdraget ditt før du
                         bruker det i skattemeldingen. Du er selv ansvarlig for at opplysningene i skattemeldingen din er riktige.
                       </div>
@@ -295,6 +295,17 @@ export default function Kalkulator() {
             </>
           ) : (
             <>
+              <div className="kalk-import-disclaimer">
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
+                </svg>
+                <div>
+                  Selger du HELE beholdningen av denne aksjen, er tallene under korrekte. Selger du bare EN DEL,
+                  krever Skatteetaten at de eldste aksjene dine regnes som solgt først (FIFO) med sin egen faktiske
+                  kostpris — hvis du kjøpte til ulike priser over tid, kan riktig skattetall avvike noe fra det
+                  denne kalkulatoren viser her.
+                </div>
+              </div>
               {user && posisjoner.length > 0 && (
                 <div className="kalk-import">
                   <div className="kalk-import-head">
@@ -316,7 +327,7 @@ export default function Kalkulator() {
                         <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" />
                       </svg>
                       <div>
-                        Kostprisen er hentet fra GAV i din Nordnet-import og er ikke kvalitetssikret av Kursett.
+                        Kostprisen er hentet fra GAV i din import og er ikke kvalitetssikret av Kursett.
                         Kontroller alltid tallet mot kontoutskriften din før du bruker det i skattemeldingen —
                         du er selv ansvarlig for at opplysningene i skattemeldingen din er riktige.
                       </div>
@@ -522,6 +533,30 @@ export default function Kalkulator() {
         </div>
       )}
 
+      <div className="kalk-funksjoner">
+        <h2>Kalkulatoren over regner ut én aksje av gangen. Gratis konto gjør det automatisk for hele porteføljen.</h2>
+        <div className="kalk-funksjon-grid">
+          <div className="kalk-funksjon">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7"><path d="M3 17l6-6 4 4 8-8M14 7h7v7" /></svg>
+            <b>Skattemotor for hele porteføljen</b>
+            <span>Skjermingsfradrag, gevinst ved salg og en logg over realiserte salg — regnet ut automatisk
+              for hver aksje du eier, ikke bare én om gangen.</span>
+          </div>
+          <div className="kalk-funksjon">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7"><path d="M12 3a5 5 0 0 1 5 5c0 2-1 3-1 5H8c0-2-1-3-1-5a5 5 0 0 1 5-5ZM9 18h6M10 21h4" /></svg>
+            <b>Rådgiver</b>
+            <span>Spør om din egen portefølje og dine egne skattetall. Forklarer sammensetning og risiko —
+              anbefaler aldri kjøp eller salg.</span>
+          </div>
+          <div className="kalk-funksjon">
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7"><path d="M3 3h18v18H3zM3 9h18M9 21V9" /></svg>
+            <b>Flere kontoer samtidig</b>
+            <span>Importer VPS og ASK side om side fra megleren din, uten at den ene overskriver den andre.</span>
+          </div>
+        </div>
+        <Link to="/login" className="btn kalk-funksjoner-cta">Opprett gratis konto</Link>
+      </div>
+
       <div className="kalk-bunn">
         <div className="kalk-disclaimer">
           Dette er en forklaring, ikke skatterådgivning. Kontroller alltid mot{' '}
@@ -536,7 +571,7 @@ export default function Kalkulator() {
           </Link>
           <Link to="/login" className="kalk-kort">
             <b>Har du mange aksjer?</b>
-            <span>Opprett gratis konto, importer fra Nordnet og se hele porteføljen samlet</span>
+            <span>Opprett gratis konto, importer porteføljen fra megleren din og se alt samlet</span>
           </Link>
         </div>
       </div>

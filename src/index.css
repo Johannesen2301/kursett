@@ -685,12 +685,25 @@ textarea:focus{outline:none;border-color:var(--teal-deep)}
 .kalk-kort b{display:block;font-family:'Schibsted Grotesk';font-weight:700;font-size:15px;color:var(--ink)}
 .kalk-kort span{display:block;font-size:13.5px;color:var(--muted);margin-top:5px;line-height:1.45}
 
+.kalk-funksjoner{max-width:900px;margin:36px auto 0;padding:38px 34px;background:var(--navy);border-radius:20px;text-align:center}
+.kalk-funksjoner h2{font-family:'Schibsted Grotesk';font-weight:700;font-size:22px;color:#fff;max-width:38ch;margin:0 auto;line-height:1.35}
+.kalk-funksjon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px;text-align:left}
+.kalk-funksjon{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px}
+.kalk-funksjon svg{width:22px;height:22px;stroke:var(--teal);fill:none;margin-bottom:12px}
+.kalk-funksjon b{display:block;font-family:'Schibsted Grotesk';font-weight:700;font-size:15px;color:#fff}
+.kalk-funksjon span{display:block;font-size:13.5px;color:var(--sage);margin-top:7px;line-height:1.55}
+.kalk-funksjoner-cta{display:inline-block;margin-top:28px;background:var(--teal-deep);text-decoration:none}
+.kalk-funksjoner-cta:hover{background:var(--teal)}
+
 @media (max-width:640px){
   .kalk-hero h1{font-size:25px}
   .kalk-hero p{font-size:15px}
   .kalk-innhold{padding:20px 18px}
   .kalk-tall{font-size:31px}
   .kalk-videre{grid-template-columns:1fr}
+  .kalk-funksjoner{padding:28px 22px}
+  .kalk-funksjoner h2{font-size:19px}
+  .kalk-funksjon-grid{grid-template-columns:1fr}
   .kalk-fane{font-size:13px;padding:13px 8px}
   .kalk-rad{font-size:13.5px}
   .kalk-rad b{font-size:13.5px}

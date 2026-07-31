@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { hentPriser } from '../lib/prices'
 import { beregnPortefolje, formaterKr, formaterPst } from '../lib/portfolio'
-import { beregnVPSPortefolje, hentSkjermingRader } from '../lib/skattemotor'
+import { beregnVPSPortefolje, hentSkjermingRader, hentRealiserteSalg, beregnRealisertSalg, summerRealiserteSalg } from '../lib/skattemotor'
 import { kr, krDes, SISTE_AAR } from '../lib/skattekalkulator'
 import { SKATTEKUNNSKAP, OM_KURSETT } from '../lib/kunnskapsgrunnlag'
 
@@ -24,7 +24,11 @@ EGEN portefølje og skattetall, ikke bare generelle regler. Her er det eksplisit
   en konsekvens av et scenario brukeren spør om — ikke det samme som å anbefale salg.
 Fortsatt gjelder de absolutte reglene fra kunnskapsgrunnlaget: du sier ALDRI hva brukeren bør kjøpe, selge,
 beholde, eller om en aksje er "god" eller "dårlig". Du beskriver hva som ER i porteføljen og hvorfor, ikke
-hva brukeren bør gjøre med det. Har brukeren ingen egne tall under, forklar generelt i stedet.`
+hva brukeren bør gjøre med det. Har brukeren ingen egne tall under, forklar generelt i stedet.
+
+Kjent begrensning å nevne HVIS brukeren spør om et DELSALG (selger færre aksjer enn de eier av en posisjon):
+tallene under bruker vektet snitt-GAV for hele posisjonen, ikke FIFO (eldste aksjer solgt først) som
+Skatteetaten krever ved delsalg. Er det et FULLT salg av det brukeren eier nå, er tallet korrekt uansett.`
 
 // Enkel markdown → HTML-elementer. Kun fet skrift og punktlister. Delt logikk
 // med Assistent.jsx (bevisst duplisert — begge er små og uavhengige).
@@ -50,7 +54,7 @@ function formater(tekst) {
 // Bygger en tekstoppsummering av brukerens EGNE tall — hentet fra nøyaktig
 // samme beregning som Min skatt viser, slik at rådgiveren aldri regner egne
 // tall selv, bare forklarer det som allerede er regnet ut.
-function byggPersonligGrunnlag({ pf, rader, askUbenyttet }) {
+function byggPersonligGrunnlag({ pf, rader, askUbenyttet, realiserteSalg }) {
   if (!pf || pf.antall === 0) return null
 
   const linjer = []
@@ -97,6 +101,21 @@ function byggPersonligGrunnlag({ pf, rader, askUbenyttet }) {
     linjer.push('Ingen av posisjonene har nok data (mangler GAV) til at skjermingsfradrag er beregnet ennå.')
   }
 
+  if (realiserteSalg && realiserteSalg.length > 0) {
+    linjer.push(`\nFAKTISKE (ikke hypotetiske) salg registrert av brukeren i ${SISTE_AAR}:`)
+    for (const salg of realiserteSalg) {
+      const g = beregnRealisertSalg(salg)
+      linjer.push(
+        `- ${salg.dato}: solgte ${salg.antall} stk ${salg.navn} for ${kr(g.salgssum)} ` +
+        (g.erGevinst
+          ? `— gevinst ${kr(g.gevinstFoerSkjerming)}, skattepliktig ${krDes(g.skattepliktig)}, skatt ${krDes(g.skatt)}`
+          : `— tap ${kr(g.tap)}, skattebesparelse ${krDes(Math.abs(g.skattEffekt))}`)
+      )
+    }
+    const totSalg = summerRealiserteSalg(realiserteSalg)
+    linjer.push(`Realisert totalt i ${SISTE_AAR}: gevinst/tap ${kr(totSalg.gevinstFoerSkjerming)}, skatt/skattebesparelse ${krDes(totSalg.skattEffekt)}.`)
+  }
+
   if (askUbenyttet != null) {
     linjer.push(`Brukeren har også en aksjesparekonto (ASK) med ${kr(askUbenyttet)} i ubenyttet skjerming fremført fra tidligere lagring. Årets ASK-tall (laveste innskuddssaldo, uttak) er ikke tilgjengelig her — det regnes ut i Min skatt-fanen for ASK, og brukeren må laste opp et kontoutdrag der for et ferskt tall.`)
   }
@@ -117,6 +136,7 @@ export default function Radgiver() {
   const [posisjoner, setPosisjoner] = useState([])
   const [prisdata, setPrisdata] = useState(null)
   const [skjermingRader, setSkjermingRader] = useState([])
+  const [realiserteSalg, setRealiserteSalg] = useState([])
   const [laster, setLaster] = useState(true)
 
   const [meldinger, setMeldinger] = useState([])
@@ -138,6 +158,7 @@ export default function Radgiver() {
       if (posFeil) { setFeil('Fikk ikke hentet porteføljen (' + posFeil.message + ')'); setLaster(false); return }
       setPosisjoner(pos || [])
       hentSkjermingRader(supabase).then((r) => { if (!avbrutt) setSkjermingRader(r) }).catch(() => {})
+      hentRealiserteSalg(supabase).then((r) => { if (!avbrutt) setRealiserteSalg(r) }).catch(() => {})
       if (pos && pos.length > 0) {
         const priser = await hentPriser(pos).catch(() => null)
         if (!avbrutt) setPrisdata(priser)
@@ -159,8 +180,8 @@ export default function Radgiver() {
   }, [skjermingRader])
 
   const personligGrunnlag = useMemo(
-    () => byggPersonligGrunnlag({ pf, rader, askUbenyttet }),
-    [pf, rader, askUbenyttet]
+    () => byggPersonligGrunnlag({ pf, rader, askUbenyttet, realiserteSalg }),
+    [pf, rader, askUbenyttet, realiserteSalg]
   )
 
   async function send(sporsmal) {

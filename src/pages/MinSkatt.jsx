@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { hentPriser } from '../lib/prices'
-import { beregnASK, kr, krDes, SISTE_AAR, EFFEKTIV_SATS } from '../lib/skattekalkulator'
-import { beregnVPSPortefolje, hentSkjermingRader, lagreSkjerming } from '../lib/skattemotor'
+import { beregnASK, beregnGevinstVedSalg, kr, krDes, SISTE_AAR, EFFEKTIV_SATS } from '../lib/skattekalkulator'
+import {
+  beregnVPSPortefolje, hentSkjermingRader, lagreSkjerming,
+  beregnRealisertSalg, summerRealiserteSalg, hentRealiserteSalg, lagreRealisertSalg, slettRealisertSalg,
+} from '../lib/skattemotor'
 import { parseTransaksjonerCSV, beregnLavesteSaldo } from '../lib/nordnetTransaksjoner'
 
 // ASK er kontobasert, ikke per aksje — bruker en fast nøkkel i skjerming-tabellen.
@@ -25,6 +28,29 @@ alter table skjerming enable row level security;
 
 drop policy if exists "egen skjerming" on skjerming;
 create policy "egen skjerming" on skjerming
+  for all
+  using (auth.uid() = bruker_id)
+  with check (auth.uid() = bruker_id);`
+
+const REALISERT_SQL = `create table if not exists realiserte_salg (
+  id uuid primary key default gen_random_uuid(),
+  bruker_id uuid not null references auth.users(id) on delete cascade,
+  noekkel text not null,
+  navn text not null,
+  antall numeric not null,
+  kostpris numeric not null,
+  salgssum numeric not null,
+  salgskurtasje numeric not null default 0,
+  ubenyttet_skjerming numeric not null default 0,
+  dato date not null,
+  aar integer not null,
+  opprettet timestamptz default now()
+);
+
+alter table realiserte_salg enable row level security;
+
+drop policy if exists "egne realiserte salg" on realiserte_salg;
+create policy "egne realiserte salg" on realiserte_salg
   for all
   using (auth.uid() = bruker_id)
   with check (auth.uid() = bruker_id);`
@@ -57,6 +83,19 @@ export default function MinSkatt() {
   const [lagretOk, setLagretOk] = useState(false)
   const [manglerTabell, setManglerTabell] = useState(false)
 
+  // Realiserte salg
+  const [realiserteSalg, setRealiserteSalg] = useState([])
+  const [manglerSalgTabell, setManglerSalgTabell] = useState(false)
+  const [salgNoekkel, setSalgNoekkel] = useState('')
+  const [salgAntall, setSalgAntall] = useState('')
+  const [salgSum, setSalgSum] = useState('')
+  const [salgKurtasje, setSalgKurtasje] = useState('')
+  const [salgUbenyttet, setSalgUbenyttet] = useState('')
+  const [salgUbenyttetTouched, setSalgUbenyttetTouched] = useState(false)
+  const [salgDato, setSalgDato] = useState(() => new Date().toISOString().slice(0, 10))
+  const [salgLagrer, setSalgLagrer] = useState(false)
+  const [salgFeil, setSalgFeil] = useState('')
+
   // ASK
   const [askTransaksjoner, setAskTransaksjoner] = useState(null)
   const [askCsvFeil, setAskCsvFeil] = useState('')
@@ -87,6 +126,14 @@ export default function MinSkatt() {
         else setFeil('Fikk ikke hentet lagret skjerming (' + e.message + ')')
       }
 
+      try {
+        setRealiserteSalg(await hentRealiserteSalg(supabase))
+      } catch (e) {
+        if (avbrutt) { /* ignorer */ }
+        else if (/could not find the table|does not exist/i.test(e.message)) setManglerSalgTabell(true)
+        else setFeil('Fikk ikke hentet realiserte salg (' + e.message + ')')
+      }
+
       if (pos && pos.length > 0) {
         const priser = await hentPriser(pos).catch(() => null)
         if (!avbrutt) setPrisdata(priser)
@@ -106,6 +153,69 @@ export default function MinSkatt() {
     () => beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt }),
     [posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt]
   )
+
+  const salgValgtPosisjon = rader.find((x) => x.noekkel === salgNoekkel) || null
+  const salgKostprisPerAksje = salgValgtPosisjon ? salgValgtPosisjon.r.inngangsverdi / salgValgtPosisjon.antall : 0
+
+  // Foreslår ubenyttet skjerming proporsjonalt med hvor stor andel av
+  // posisjonen som selges — brukeren kan alltid overstyre.
+  useEffect(() => {
+    if (salgUbenyttetTouched || !salgValgtPosisjon) return
+    const antall = Number(salgAntall) || 0
+    if (antall <= 0) return
+    const andel = Math.min(1, antall / salgValgtPosisjon.antall)
+    setSalgUbenyttet(String(Math.round(salgValgtPosisjon.r.ubenyttetInn * andel)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salgNoekkel, salgAntall])
+
+  const salgForhandsvisning = salgValgtPosisjon && Number(salgAntall) > 0 && salgSum !== ''
+    ? beregnGevinstVedSalg({
+        kostpris: salgKostprisPerAksje * Number(salgAntall),
+        salgssum: salgSum, salgskurtasje: salgKurtasje, ubenyttetSkjerming: salgUbenyttet, aar: SISTE_AAR,
+      })
+    : null
+
+  const realisertTotal = useMemo(() => summerRealiserteSalg(realiserteSalg), [realiserteSalg])
+
+  function nullstillSalgSkjema() {
+    setSalgNoekkel(''); setSalgAntall(''); setSalgSum(''); setSalgKurtasje('')
+    setSalgUbenyttet(''); setSalgUbenyttetTouched(false)
+    setSalgDato(new Date().toISOString().slice(0, 10))
+  }
+
+  async function handleLagreSalg() {
+    if (!user || !salgValgtPosisjon) return
+    setSalgLagrer(true); setSalgFeil('')
+    try {
+      await lagreRealisertSalg(supabase, user.id, {
+        noekkel: salgValgtPosisjon.noekkel,
+        navn: salgValgtPosisjon.navn,
+        antall: Number(salgAntall),
+        kostpris: salgKostprisPerAksje * Number(salgAntall),
+        salgssum: Number(salgSum) || 0,
+        salgskurtasje: Number(salgKurtasje) || 0,
+        ubenyttet_skjerming: Number(salgUbenyttet) || 0,
+        dato: salgDato,
+        aar: SISTE_AAR,
+      })
+      setRealiserteSalg(await hentRealiserteSalg(supabase))
+      nullstillSalgSkjema()
+    } catch (e) {
+      setSalgFeil(e.message)
+    } finally {
+      setSalgLagrer(false)
+    }
+  }
+
+  async function handleSlettSalg(id) {
+    setSalgFeil('')
+    try {
+      await slettRealisertSalg(supabase, id)
+      setRealiserteSalg(await hentRealiserteSalg(supabase))
+    } catch (e) {
+      setSalgFeil(e.message)
+    }
+  }
 
   async function handleAskFile(e) {
     const file = e.target.files?.[0]; if (!file) return
@@ -359,6 +469,134 @@ export default function MinSkatt() {
         </div>
       )}
 
+      {type === 'vps' && (
+        <div className="panel" style={{ marginTop: 18 }}>
+          <div className="panel-h">
+            <h2>Realiserte salg {SISTE_AAR}</h2>
+            <span className="hint">Faktiske salg, ikke en hypotese</span>
+          </div>
+
+          {manglerSalgTabell && (
+            <div className="kalk-fremfor" style={{ marginBottom: 18 }}>
+              <div className="kalk-fremfor-tittel">Én rask ting i Supabase, så lagres realiserte salg</div>
+              <p>
+                Realiserte salg lagres i en egen tabell som ikke finnes i prosjektet ditt ennå. Lim inn dette i
+                Supabase → SQL Editor → Run (kun én gang):
+              </p>
+              <pre className="motor-sql">{REALISERT_SQL}</pre>
+            </div>
+          )}
+
+          {realiserteSalg.length > 0 && (
+            <>
+              <table className="holdings" style={{ marginBottom: 18 }}>
+                <thead>
+                  <tr>
+                    <th>Aksje</th><th className="r">Dato</th><th className="r">Antall</th>
+                    <th className="r">Gevinst/tap</th><th className="r">Skatt</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {realiserteSalg.map((salg) => {
+                    const g = beregnRealisertSalg(salg)
+                    return (
+                      <tr key={salg.id}>
+                        <td><span className="nm">{salg.navn}</span></td>
+                        <td className="r mono">{salg.dato}</td>
+                        <td className="r mono">{salg.antall}</td>
+                        <td className="r mono">{g.erGevinst ? kr(g.gevinstFoerSkjerming) : kr(g.tap)}</td>
+                        <td className="r mono">{g.erGevinst ? krDes(g.skatt) : '−' + krDes(Math.abs(g.skattEffekt))}</td>
+                        <td className="r">
+                          <button type="button" className="btn ghost" style={{ padding: '6px 12px', fontSize: 13 }}
+                            onClick={() => handleSlettSalg(salg.id)}>
+                            Slett
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <div className="kalk-regnestykke" style={{ marginBottom: 18 }}>
+                <div className="kalk-rad sum"><span>Realisert gevinst/tap totalt</span><b>{kr(realisertTotal.gevinstFoerSkjerming)}</b></div>
+                <div className="kalk-rad"><span>Skattepliktig etter skjerming</span><b>{krDes(realisertTotal.skattepliktig)}</b></div>
+                <div className="kalk-rad resultat"><span>Skatt/skattebesparelse totalt</span><b>{krDes(realisertTotal.skattEffekt)}</b></div>
+                {realisertTotal.bortfaltSkjerming > 0 && (
+                  <div className="import-hint" style={{ marginTop: 10 }}>
+                    {krDes(realisertTotal.bortfaltSkjerming)} i skjerming har gått tapt på disse salgene.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="kalk-tittel" style={{ marginBottom: 10 }}>Registrer et salg</div>
+          <div className="konto-velger" style={{ marginBottom: 0 }}>
+            <select className="kalk-select konto-type-select" style={{ flex: '1 1 220px' }}
+              value={salgNoekkel} onChange={(e) => { setSalgNoekkel(e.target.value); setSalgUbenyttetTouched(false) }}>
+              <option value="">— velg aksje —</option>
+              {rader.map((x) => (
+                <option key={x.noekkel} value={x.noekkel}>{x.navn} ({x.antall} stk eid)</option>
+              ))}
+            </select>
+          </div>
+          {salgValgtPosisjon && (
+            <>
+              <Felt label="Antall solgt" verdi={salgAntall} setVerdi={setSalgAntall} enhet="stk" />
+              {Number(salgAntall) > 0 && Number(salgAntall) < salgValgtPosisjon.antall && (
+                <div className="kalk-import-disclaimer">
+                  <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+                  <div>
+                    Du selger en DEL av posisjonen. Kostprisen under bruker vektet snitt-GAV for hele posisjonen,
+                    ikke FIFO (eldste aksjer selges først) som Skatteetaten krever ved delsalg. Har du kjøpt disse
+                    aksjene på ulike tidspunkt til ulike priser, kan riktig skattetall avvike noe fra dette —
+                    kontroller mot kjøpshistorikken din. Selger du hele posisjonen er tallet korrekt uansett.
+                  </div>
+                </div>
+              )}
+              <Felt label="Salgssum" hjelp="Det du solgte aksjene for" verdi={salgSum} setVerdi={setSalgSum} />
+              <Felt label="Kurtasje ved salg" verdi={salgKurtasje} setVerdi={setSalgKurtasje} valgfri />
+              <Felt label="Ubenyttet skjerming brukt"
+                hjelp="Foreslått proporsjonalt med hvor mye av posisjonen du selger — kan overstyres."
+                verdi={salgUbenyttet} setVerdi={(v) => { setSalgUbenyttetTouched(true); setSalgUbenyttet(v) }} valgfri />
+              <Felt label="Salgsdato" verdi={salgDato} setVerdi={setSalgDato} type="date" enhet="" />
+
+              {salgForhandsvisning && (
+                <div className="kalk-regnestykke" style={{ marginTop: 16 }}>
+                  <div className="kalk-tittel">Slik regnes salget ut</div>
+                  <div className="kalk-rad"><span>Salgssum</span><b>{kr(salgForhandsvisning.salgssum)}</b></div>
+                  <div className="kalk-rad"><span>− Kostpris</span><b>−{kr(salgForhandsvisning.inngangsverdi)}</b></div>
+                  <div className="kalk-rad sum">
+                    <span>= {salgForhandsvisning.erGevinst ? 'Gevinst før skjerming' : 'Tap'}</span>
+                    <b>{salgForhandsvisning.erGevinst ? kr(salgForhandsvisning.gevinstFoerSkjerming) : kr(salgForhandsvisning.tap)}</b>
+                  </div>
+                  {salgForhandsvisning.erGevinst ? (
+                    <>
+                      <div className="kalk-rad"><span>− Skjermingsfradrag brukt</span><b>−{krDes(salgForhandsvisning.brukt)}</b></div>
+                      <div className="kalk-rad sum"><span>= Skattepliktig gevinst</span><b>{krDes(salgForhandsvisning.skattepliktig)}</b></div>
+                      <div className="kalk-rad resultat"><span>= Skatt å betale</span><b>{krDes(salgForhandsvisning.skatt)}</b></div>
+                    </>
+                  ) : (
+                    <div className="kalk-rad resultat"><span>= Skattebesparelse (fradrag)</span><b>{krDes(Math.abs(salgForhandsvisning.skattEffekt))}</b></div>
+                  )}
+                  {salgForhandsvisning.bortfaltSkjerming > 0 && (
+                    <div className="import-hint" style={{ marginTop: 10 }}>
+                      {krDes(salgForhandsvisning.bortfaltSkjerming)} i skjerming bortfaller ved dette salget.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {salgFeil && <div className="import-feil" style={{ marginTop: 14 }}>{salgFeil}</div>}
+              <button className="btn" style={{ marginTop: 14 }} disabled={salgLagrer || !salgAntall || !salgSum}
+                onClick={handleLagreSalg}>
+                {salgLagrer ? 'Lagrer …' : 'Registrer salget'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {type === 'ask' && (
       <div className="panel">
         <div className="panel-h"><h2>Aksjesparekonto (ASK)</h2></div>
@@ -367,7 +605,7 @@ export default function MinSkatt() {
             <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg>
             <div>
               <label>Regn ut fra kontoutdrag</label>
-              <div className="kalk-hjelp">Last opp transaksjonseksporten fra Nordnet, så regner vi ut laveste innskuddssaldo og uttak automatisk.</div>
+              <div className="kalk-hjelp">Last opp transaksjonseksporten fra megleren din, så regner vi ut laveste innskuddssaldo og uttak automatisk.</div>
             </div>
           </div>
           <button type="button" className="btn ghost" onClick={() => askFileRef.current?.click()}>
@@ -402,7 +640,7 @@ export default function MinSkatt() {
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
                 <div>
                   Dette forutsetter at feltet over er riktig saldo rett før {askTransaksjoner.forsteDato}, og at fila
-                  dekker resten av {SISTE_AAR} uten hull. Interne overføringer mellom dine egne Nordnet-kontoer telles
+                  dekker resten av {SISTE_AAR} uten hull. Interne overføringer mellom dine egne kontoer telles
                   ikke med. Kontroller alltid mot kontoutdraget ditt før du bruker det i skattemeldingen.
                 </div>
               </div>
@@ -450,7 +688,7 @@ export default function MinSkatt() {
   )
 }
 
-function Felt({ label, hjelp, verdi, setVerdi, valgfri }) {
+function Felt({ label, hjelp, verdi, setVerdi, valgfri, enhet = 'kr', type = 'number' }) {
   return (
     <div className="kalk-felt">
       <label>
@@ -460,13 +698,13 @@ function Felt({ label, hjelp, verdi, setVerdi, valgfri }) {
       {hjelp && <div className="kalk-hjelp">{hjelp}</div>}
       <div className="kalk-input">
         <input
-          type="number"
-          inputMode="decimal"
+          type={type}
+          inputMode={type === 'number' ? 'decimal' : undefined}
           value={verdi}
           onChange={(e) => setVerdi(e.target.value)}
-          placeholder="0"
+          placeholder={type === 'number' ? '0' : undefined}
         />
-        <span className="kalk-enhet">kr</span>
+        {enhet && <span className="kalk-enhet">{enhet}</span>}
       </div>
     </div>
   )

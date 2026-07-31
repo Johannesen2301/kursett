@@ -28,7 +28,7 @@ function formater(tekst) {
 const FORSLAG = [
   'Hva er skjermingsfradrag?',
   'Hva er forskjellen på ASK og VPS?',
-  'Hvordan importerer jeg fra Nordnet?',
+  'Hvordan importerer jeg porteføljen min?',
   'Hva skjer med skjermingen hvis jeg selger med tap?',
 ]
 

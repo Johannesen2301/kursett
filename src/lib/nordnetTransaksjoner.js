@@ -7,7 +7,7 @@ const INTERN_PREFIX = /^internal\s/i
 export function parseTransaksjonerCSV(buf) {
   const text = decode(buf).replace(/^﻿/, '')
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '')
-  if (lines.length < 2) throw new Error('Fant ingen rader i fila. Er dette riktig kontoutdrag fra Nordnet?')
+  if (lines.length < 2) throw new Error('Fant ingen rader i fila. Er dette et riktig kontoutdrag/transaksjonseksport?')
   const delim = detectDelimiter(lines[0])
   const rows = lines.map((l) => l.split(delim).map((c) => c.trim().replace(/^"|"$/g, '')))
   const header = rows[0].map((h) => h.trim().toLowerCase())

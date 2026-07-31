@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { noekkelFor, utbytteIAar, beregnVPSPortefolje } from './skattemotor'
+import { noekkelFor, utbytteIAar, beregnVPSPortefolje, beregnRealisertSalg, summerRealiserteSalg } from './skattemotor'
 import { SISTE_AAR } from './skattekalkulator'
 
 describe('noekkelFor', () => {
@@ -87,5 +87,35 @@ describe('beregnVPSPortefolje', () => {
     const equinor = rader.find((r) => r.navn === 'Equinor')
     expect(equinor.r.utbytte).toBe(1000)
     expect(equinor.r.ubenyttetInn).toBe(250)
+  })
+})
+
+describe('beregnRealisertSalg / summerRealiserteSalg', () => {
+  it('beregnRealisertSalg regner ut gevinst for ett lagret salg', () => {
+    const salg = { kostpris: 10000, salgssum: 15000, salgskurtasje: 0, ubenyttet_skjerming: 500, aar: SISTE_AAR }
+    const g = beregnRealisertSalg(salg)
+    expect(g.gevinstFoerSkjerming).toBe(5000)
+    expect(g.erGevinst).toBe(true)
+  })
+
+  it('summerer flere salg korrekt, inkludert et tap som ikke bruker skjerming', () => {
+    const salgListe = [
+      { kostpris: 10000, salgssum: 15000, salgskurtasje: 0, ubenyttet_skjerming: 500, aar: SISTE_AAR }, // gevinst
+      { kostpris: 8000, salgssum: 6000, salgskurtasje: 0, ubenyttet_skjerming: 300, aar: SISTE_AAR },   // tap
+    ]
+    const tot = summerRealiserteSalg(salgListe)
+    expect(tot.gevinstFoerSkjerming).toBe(5000 + (-2000))
+    // Skjermingen fra tap-salget (300 × rente) skal telle som bortfalt, ikke brukt
+    const g2 = beregnRealisertSalg(salgListe[1])
+    expect(tot.bortfaltSkjerming).toBeCloseTo(g2.skjerming, 6)
+  })
+
+  it('returnerer nulltall for en tom liste', () => {
+    expect(summerRealiserteSalg([])).toEqual({
+      gevinstFoerSkjerming: 0, skattepliktig: 0, skatt: 0, skattEffekt: 0, bortfaltSkjerming: 0,
+    })
+    expect(summerRealiserteSalg(undefined)).toEqual({
+      gevinstFoerSkjerming: 0, skattepliktig: 0, skatt: 0, skattEffekt: 0, bortfaltSkjerming: 0,
+    })
   })
 })

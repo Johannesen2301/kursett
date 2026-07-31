@@ -104,6 +104,62 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
   return { rader, utenKostpris, ikkeVPS }
 }
 
+// Regner ut gevinst/tap for ETT lagret, faktisk salg (ikke en hypotese som
+// «hvis du selger i dag»). Ren wrapper rundt beregnGevinstVedSalg som gjør
+// om lagrede felter til riktig input.
+export function beregnRealisertSalg(salg) {
+  return beregnGevinstVedSalg({
+    kostpris: salg.kostpris,
+    kurtasje: 0,
+    salgssum: salg.salgssum,
+    salgskurtasje: salg.salgskurtasje,
+    ubenyttetSkjerming: salg.ubenyttet_skjerming,
+    aar: salg.aar,
+  })
+}
+
+// Summerer skattepliktig gevinst, skatt og bortfalt skjerming over flere
+// realiserte salg i året — brukes til totalen øverst i Min skatt.
+export function summerRealiserteSalg(salgListe) {
+  return (salgListe || []).reduce((s, salg) => {
+    const g = beregnRealisertSalg(salg)
+    return {
+      gevinstFoerSkjerming: s.gevinstFoerSkjerming + g.gevinstFoerSkjerming,
+      skattepliktig: s.skattepliktig + g.skattepliktig,
+      skatt: s.skatt + g.skatt,
+      skattEffekt: s.skattEffekt + g.skattEffekt,
+      bortfaltSkjerming: s.bortfaltSkjerming + g.bortfaltSkjerming,
+    }
+  }, { gevinstFoerSkjerming: 0, skattepliktig: 0, skatt: 0, skattEffekt: 0, bortfaltSkjerming: 0 })
+}
+
+export async function hentRealiserteSalg(supabase, aar = SISTE_AAR) {
+  const { data, error } = await supabase.from('realiserte_salg').select('*').eq('aar', aar).order('dato', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function lagreRealisertSalg(supabase, brukerId, salg) {
+  const { error } = await supabase.from('realiserte_salg').insert({
+    bruker_id: brukerId,
+    noekkel: salg.noekkel,
+    navn: salg.navn,
+    antall: salg.antall,
+    kostpris: salg.kostpris,
+    salgssum: salg.salgssum,
+    salgskurtasje: salg.salgskurtasje || 0,
+    ubenyttet_skjerming: salg.ubenyttet_skjerming || 0,
+    dato: salg.dato,
+    aar: salg.aar,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function slettRealisertSalg(supabase, id) {
+  const { error } = await supabase.from('realiserte_salg').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 export async function hentSkjermingRader(supabase) {
   const { data, error } = await supabase.from('skjerming').select('*')
   if (error) throw new Error(error.message)

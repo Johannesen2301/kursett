@@ -17,6 +17,36 @@ describe('num', () => {
   })
 })
 
+describe('parseNordnetCSV — kolonnegjenkjenning på tvers av meglere', () => {
+  // Kolonnematchingen er ikke faktisk Nordnet-spesifikk — den leter etter
+  // vanlige norske/engelske finansbegreper. Disse testene bekrefter at en
+  // annen megler enn Nordnet (eller en engelskspråklig eksport) sannsynligvis
+  // fungerer uten endringer, selv om vi ikke har en ekte fil å teste mot.
+  it('gjenkjenner engelske kolonnenavn (Name/Quantity/Price/Market Value/Cost price)', () => {
+    const csv = csvBuf([
+      'Name,ISIN,Quantity,Price,Market Value,Cost price',
+      'Equinor,NO0010096985,10,300,3000,250',
+    ])
+    const { positions } = parseNordnetCSV(csv)
+    expect(positions[0]).toMatchObject({ navn: 'Equinor', isin: 'NO0010096985', antall: 10, gav: 250 })
+  })
+
+  it('gjenkjenner alternative norske kolonnenavn (Instrument/Beholdning/Snittkurs)', () => {
+    const csv = csvBuf([
+      'Instrument;ISIN;Beholdning;Markedsverdi;Snittkurs',
+      'Telenor;NO0010063308;20;3000;140',
+    ])
+    const { positions } = parseNordnetCSV(csv)
+    expect(positions[0]).toMatchObject({ navn: 'Telenor', antall: 20, gav: 140 })
+  })
+
+  it('regner ut markedsverdi fra antall × kurs når fila mangler en egen markedsverdi-kolonne', () => {
+    const csv = csvBuf(['Verdipapir;Antall;Kurs', 'Equinor;10;300'])
+    const { positions } = parseNordnetCSV(csv)
+    expect(positions[0].markedsverdi).toBe(3000)
+  })
+})
+
 describe('parseNordnetCSV — sammenslåing av flere lot-rader (regresjonstest)', () => {
   // Nordnet lister ofte samme aksje flere ganger (én rad per anskaffelseslot).
   // Før denne fiksen ble hver rad vist som en egen "posisjon" i porteføljen —

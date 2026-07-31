@@ -46,7 +46,7 @@ export default function Personvern() {
                   <td className="jt-k">Porteføljedata</td>
                   <td>
                     Aksjenavn, antall, markedsverdi og kostpris fra CSV-en du importerer fra
-                    Nordnet. Brukes til å vise porteføljen din og regne ut nøkkeltall.
+                    megleren din (f.eks. Nordnet). Brukes til å vise porteføljen din og regne ut nøkkeltall.
                   </td>
                 </tr>
                 <tr>

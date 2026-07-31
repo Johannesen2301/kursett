@@ -110,16 +110,18 @@ export const OM_KURSETT = `
 Et norsk verktøy for utbytteinvestorer. Gratis å bruke.
 - Skjermingsfradrag-kalkulator (åpen, ingen innlogging): /skjermingsfradrag
 - Skatteregler med kilder: /skatteregler
-- Porteføljetracker med Nordnet-import (krever konto)
+- Porteføljetracker med CSV-import fra megler, f.eks. Nordnet (krever konto)
 - Fellesskap: profiler, toppliste, venner, meldinger, rom med chat og forum
 
-## Importere portefølje fra Nordnet
-1. Logg inn i Nordnet
+## Importere portefølje fra megler
+1. Logg inn hos megleren din (f.eks. Nordnet)
 2. Gå til Depot / Beholdning
 3. Last ned beholdningen som CSV
 4. I Kursett: Min portefølje → Velg CSV-fil
 
-Kursett leser aksjenavn, antall, markedsverdi og GAV fra filen.
+Kursett leser aksjenavn, antall, markedsverdi og GAV fra filen. Er du på en annen megler enn Nordnet, kan
+importen fortsatt fungere — kolonnenavnene gjenkjennes automatisk. Feiler den, vis brukeren feilmeldingen,
+som lister kolonnene som faktisk ble funnet i fila.
 Formatet er UTF-16, tab-separert — det håndteres automatisk.
 
 ## Personvern

@@ -21,6 +21,8 @@ export default function Portefolje() {
   const [importStatus, setImportStatus] = useState('')
   const [nyKontoNavn, setNyKontoNavn] = useState('VPS')
   const [nyKontoType, setNyKontoType] = useState('vps')
+  const [slettKontoNavn, setSlettKontoNavn] = useState(null)
+  const [sletterKonto, setSletterKonto] = useState(false)
 
   async function lastPosisjoner() {
     setLasterData(true)
@@ -72,6 +74,22 @@ export default function Portefolje() {
     fileRef.current?.click()
   }
 
+  async function slettKonto(navn) {
+    setSletterKonto(true); setFeil('')
+    try {
+      const { error } = await supabase.from('posisjoner').delete().eq('bruker_id', user.id).eq('konto', navn)
+      if (error) throw new Error(error.message)
+      const d = await lastPosisjoner()
+      oppdaterPriser(d)
+      setImportStatus(`Slettet kontoen «${navn}».`)
+      setSlettKontoNavn(null)
+    } catch (err) {
+      setFeil(err.message)
+    } finally {
+      setSletterKonto(false)
+    }
+  }
+
   const pf = useMemo(() => beregnPortefolje(posisjoner, prisdata), [posisjoner, prisdata])
 
   const kontoer = useMemo(() => {
@@ -94,7 +112,7 @@ export default function Portefolje() {
       <div className="import-card">
         <div className="import-icon"><svg viewBox="0 0 24 24" fill="none" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg></div>
         <h2>Importer porteføljen din</h2>
-        <p>Last opp «aksjelister»-CSV-en fra Nordnet, så viser vi sammensetningen din som et sektorfarget bånd — ditt eget fingeravtrykk.</p>
+        <p>Last opp en CSV med aksjebeholdningen din fra megleren din (f.eks. Nordnet eller DNB), så viser vi sammensetningen din som et sektorfarget bånd — ditt eget fingeravtrykk.</p>
         {feil && <div className="import-feil">{feil}</div>}
         <div className="konto-velger">
           <input type="text" className="konto-navn-input" value={nyKontoNavn} onChange={(e) => setNyKontoNavn(e.target.value)} placeholder="Kontonavn, f.eks. VPS Nordnet" />
@@ -105,7 +123,11 @@ export default function Portefolje() {
         </div>
         <button className="btn" disabled={importerer} onClick={() => fileRef.current?.click()}>{importerer ? 'Importerer …' : 'Velg CSV-fil'}</button>
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={handleFile} />
-        <div className="import-hint">Nordnet → Depot → Beholdning → last ned som CSV.</div>
+        <div className="import-hint">
+          Nordnet: Depot → Beholdning → last ned som CSV. Andre meglere: se etter «eksporter»/«last ned» på
+          beholdningssiden din. Vi gjenkjenner de vanligste kolonnenavnene automatisk — passer det ikke, får du
+          en tydelig feilmelding i stedet for gale tall.
+        </div>
       </div>
     </div>)
 
@@ -139,10 +161,16 @@ export default function Portefolje() {
                 <td className="r mono">{k.antall}</td>
                 <td className="r mono">{formaterKr(k.verdi)}</td>
                 <td className="r">
-                  <button type="button" className="btn ghost" style={{ padding: '6px 12px', fontSize: 13 }}
-                    disabled={importerer} onClick={() => startImportForKonto(k.navn, k.type)}>
-                    Importer på nytt
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn ghost" style={{ padding: '6px 12px', fontSize: 13 }}
+                      disabled={importerer} onClick={() => startImportForKonto(k.navn, k.type)}>
+                      Importer på nytt
+                    </button>
+                    <button type="button" className="btn ghost" style={{ padding: '6px 12px', fontSize: 13 }}
+                      disabled={importerer} onClick={() => setSlettKontoNavn(k.navn)}>
+                      Slett
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -182,6 +210,24 @@ export default function Portefolje() {
           <tbody>{pf.posisjoner.map((p, i) => (<tr key={i}><td><div className="tick"><span className="swdot" style={{ background: SEKTOR_FARGE[p.sektor] }} /><span className="nm">{p.navn}</span></div></td><td className="r mono" data-l="Antall">{p.antall != null ? p.antall.toLocaleString('nb-NO') : '–'}</td><td className="r mono" data-l="Markedsverdi">{formaterKr(p.liveVerdi)}</td><td className="r mono" data-l="Dir.avk.">{p.direkteavkastning != null ? formaterPst(p.direkteavkastning) : '–'}</td><td className="r mono wt" data-l="Vekt">{p.vekt.toFixed(1)}%</td></tr>))}</tbody>
         </table>
       </div>
+
+      {slettKontoNavn && (
+        <div className="mod-overlay" onClick={(e) => { if (e.target.className === 'mod-overlay') setSlettKontoNavn(null) }}>
+          <div className="mod-dialog">
+            <h3>Slette kontoen «{slettKontoNavn}»?</h3>
+            <p className="mod-tekst">
+              Alle posisjonene på denne kontoen fjernes fra porteføljen din. Andre kontoer berøres ikke. Du kan
+              importere kontoen på nytt senere hvis du ombestemmer deg.
+            </p>
+            <div className="mod-knapper">
+              <button className="btn ghost" onClick={() => setSlettKontoNavn(null)} disabled={sletterKonto}>Avbryt</button>
+              <button className="btn fare" disabled={sletterKonto} onClick={() => slettKonto(slettKontoNavn)}>
+                {sletterKonto ? 'Sletter …' : 'Slett kontoen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

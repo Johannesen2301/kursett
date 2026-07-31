@@ -4,17 +4,17 @@ export function num(s){ if(s==null)return null; s=String(s).trim().replace(/[\u0
 export function parseNordnetCSV(buf){
   const text=decode(buf).replace(/^\uFEFF/,'')
   const lines=text.split(/\r?\n/).filter(l=>l.trim()!=='')
-  if(lines.length<2) throw new Error('Fant ingen rader i fila. Er dette riktig CSV fra Nordnet?')
+  if(lines.length<2) throw new Error('Fant ingen rader i fila. Er dette en riktig CSV med aksjebeholdning?')
   const delim=detectDelimiter(lines[0])
   const rows=lines.map(l=>l.split(delim).map(c=>c.trim().replace(/^"|"$/g,'')))
   const header=rows[0].map(h=>h.trim().toLowerCase())
   const findCol=(cands)=>{ for(const c of cands){const i=header.findIndex(h=>h===c);if(i>=0)return i} for(const c of cands){const i=header.findIndex(h=>h.includes(c));if(i>=0)return i} return -1 }
   const iName=findCol(['verdipapir','navn','instrument','papir','security','name'])
   const iVal=findCol(['markedsverdi','marknadsverdi','market value','marketvalue'])
-  const iQty=findCol(['antall','beholdning','kvantitet','quantity'])
-  const iPrice=findCol(['sluttkurs','kurs','siste','pris','price'])
+  const iQty=findCol(['antall','beholdning','kvantitet','quantity','shares'])
+  const iPrice=findCol(['sluttkurs','kurs','siste','pris','price','last price'])
   const iIsin=findCol(['isin'])
-  const iGav=findCol(['gav','snittkurs','anskaffelse','kostpris','gjennomsnitt'])
+  const iGav=findCol(['gav','snittkurs','anskaffelse','kostpris','gjennomsnitt','cost price','cost basis','average price','avg price'])
   if(iName<0) throw new Error('Fant ikke en kolonne med verdipapirnavn. Kolonnene i fila var: '+header.join(', '))
   if(iVal<0&&(iQty<0||iPrice<0)) throw new Error('Fant verken markedsverdi eller antall+kurs. Kolonnene i fila var: '+header.join(', '))
   const rader=[]
