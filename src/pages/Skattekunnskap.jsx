@@ -150,6 +150,13 @@ export default function Skattekunnskap() {
           <p className="sk-ingress">{tema.ingress}</p>
           {tema.innhold.map((b, i) => <Blokk key={i} b={b} />)}
 
+          {tema.id === 'ask-vps' && (
+            <Link to="/ask-eller-vps" className="kalk-kort" style={{ marginTop: 16 }}>
+              <b>Full sammenligning: ASK eller VPS?</b>
+              <span>En egen, dypere gjennomgang med FIFU, skjermingsgrunnlag og hvem hver kontotype passer for</span>
+            </Link>
+          )}
+
           {tema.kilder && (
             <div className="sk-kilder">
               <div className="sk-kilder-tittel">

@@ -569,6 +569,10 @@ export default function Kalkulator() {
             <b>Slik fungerer skjermingsfradraget</b>
             <span>Reglene forklart, med kilder fra Skatteetaten</span>
           </Link>
+          <Link to="/ask-eller-vps" className="kalk-kort">
+            <b>ASK eller VPS — hva lønner seg?</b>
+            <span>Forskjellen på skatt, skjerming og FIFU, forklart</span>
+          </Link>
           <Link to="/login" className="kalk-kort">
             <b>Har du mange aksjer?</b>
             <span>Opprett gratis konto, importer porteføljen fra megleren din og se alt samlet</span>

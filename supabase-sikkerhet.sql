@@ -116,15 +116,14 @@ alter table rom add constraint rom_navn_lengde
   check (char_length(navn) between 2 and 60);
 
 -- ---------- 5. Admin: din oversikt over rapporter ----------
--- Bytt ut e-posten under med din egen hvis den er annerledes.
+-- Sjekker mot bruker-ID (UUID), ikke e-post — en UUID avslører ikke hvem du
+-- er hvis dette repoet er offentlig. Bytt ut UUID-en under med din egen
+-- (SQL Editor → "select auth.uid()" mens du er innlogget, eller finn den i
+-- Authentication → Users i Supabase-dashbordet).
 
 create or replace function er_admin()
 returns boolean language sql security definer set search_path = public stable as $$
-  select exists (
-    select 1 from auth.users
-    where id = auth.uid()
-      and email = 'johannesjohannesen7@gmail.com'
-  );
+  select auth.uid() = '70eb05ed-096e-495f-956e-d303ddb4b501'::uuid;
 $$;
 grant execute on function er_admin() to authenticated;
 

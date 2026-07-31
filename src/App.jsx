@@ -11,6 +11,7 @@ import Toppliste from './pages/Toppliste'
 import Meldinger from './pages/Meldinger'
 import Rom from './pages/Rom'
 import Skattekunnskap from './pages/Skattekunnskap'
+import AskEllerVps from './pages/AskEllerVps'
 import Personvern from './pages/Personvern'
 import Admin from './pages/Admin'
 import Kalkulator from './pages/Kalkulator'
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/skjermingsfradrag" element={<Kalkulator />} />
       <Route path="/kalkulator" element={<Kalkulator />} />
       <Route path="/skatteregler" element={<Skattekunnskap />} />
+      <Route path="/ask-eller-vps" element={<AskEllerVps />} />
       <Route path="/login" element={<Login />} />
 
       {/* ---------- APPEN: krever innlogging ---------- */}

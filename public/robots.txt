@@ -2,6 +2,7 @@ User-agent: *
 Allow: /
 Allow: /skatteregler
 Allow: /skjermingsfradrag
+Allow: /ask-eller-vps
 Disallow: /app
 Disallow: /login
 

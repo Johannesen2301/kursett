@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 const OPPDATERT = '13. juli 2026'
+const KONTAKT_EPOST = 'kursett.no@gmail.com'
 
 export default function Personvern() {
   const [fane, setFane] = useState('personvern')
@@ -31,8 +32,8 @@ export default function Personvern() {
 
             <h2>Hvem er ansvarlig</h2>
             <p>
-              Kursett drives av Johannes Johannesen, Egersund. Jeg er behandlingsansvarlig for
-              opplysningene dine. Spørsmål? Ta kontakt via e-postadressen nederst.
+              Kursett er behandlingsansvarlig for opplysningene dine. Spørsmål? Ta kontakt via
+              e-postadressen nederst.
             </p>
 
             <h2>Hva vi lagrer</h2>
@@ -108,7 +109,7 @@ export default function Personvern() {
             </p>
 
             <div className="jur-kontakt">
-              Spørsmål om personvern? Send e-post til <b>johannesjohannesen7@gmail.com</b>
+              Spørsmål om personvern? Send e-post til <b>{KONTAKT_EPOST}</b>
             </div>
           </>
         ) : (
@@ -172,7 +173,7 @@ export default function Personvern() {
             </p>
 
             <div className="jur-kontakt">
-              Spørsmål? Send e-post til <b>johannesjohannesen7@gmail.com</b>
+              Spørsmål? Send e-post til <b>{KONTAKT_EPOST}</b>
             </div>
           </>
         )}
