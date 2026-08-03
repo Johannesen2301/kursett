@@ -102,6 +102,63 @@ export function beregnASK({ lavesteInnskudd, ubenyttetSkjerming = 0, uttak = 0, 
 }
 
 /**
+ * Regner ut skjermingsfradrag for en FONDSANDEL (aksjefond, kombinasjonsfond
+ * eller rentefond) på vanlig konto (VPS), avhengig av fondets aksjeandel.
+ *
+ * KILDE (verifisert direkte mot Skatteetatens side «Beskatning av andeler i
+ * verdipapirfond», kryssjekket mot Skatteetatens rettledning for
+ * tredjepartsopplysninger for Verdipapirfond og VFFs fondshåndbok):
+ * - Aksjeandel ved inntektsårets begynnelse > 80 %: HELE avkastningen
+ *   skattlegges som aksjeutbytte — samme som et rent aksjefond (beregnVPS).
+ * - Aksjeandel < 20 %: HELE avkastningen skattlegges som renteinntekt —
+ *   22 % flatt, ingen skjerming, ingen oppjusteringsfaktor.
+ * - Aksjeandel 20–80 %: utbyttet splittes forholdsmessig i en aksjedel og en
+ *   rentedel. Skjermingsgrunnlaget er fortsatt FULL kostpris + ubenyttet
+ *   skjerming (ikke skalert ned), men skjermingen nettes KUN mot aksjedelen
+ *   av utbyttet — rentedelen er alltid fullt skattepliktig med 22 %.
+ *
+ * En egen, nyere lovendring for verdipapirfond gjelder fra inntektsåret 2026
+ * (fjerner skattelekkasje på FONDSNIVÅ), men endrer ikke denne andelshaver-
+ * modellen for privatpersoner så vidt kildene over viser. ⚠️ Sjekk dette på
+ * nytt mot Skatteetaten før denne funksjonen noensinne brukes for et
+ * inntektsår senere enn 2025.
+ *
+ * Ved REALISASJON (salg) av fondsandeler skal aksjeandelen som brukes være
+ * GJENNOMSNITTET av andelen i kjøpsåret og salgsåret — det er ikke
+ * implementert her ennå, og fondsposisjoner ekskluderes derfor bevisst fra
+ * salgsberegningen i Min skatt inntil det er på plass.
+ */
+export function beregnFondVPS({ kostpris, kurtasje = 0, ubenyttetSkjerming = 0, utbytte = 0, aksjeandel, aar = SISTE_AAR }) {
+  const andel = Math.max(0, Math.min(100, Number(aksjeandel) || 0))
+  const mottattUtbytte = Number(utbytte) || 0
+
+  if (andel > 80) {
+    return {
+      ...beregnVPS({ kostpris, kurtasje, ubenyttetSkjerming, utbytte: mottattUtbytte, aar }),
+      aksjeandel: andel, aksjedelUtbytte: mottattUtbytte, rentedelUtbytte: 0, rentedelSkatt: 0,
+    }
+  }
+
+  const aksjedelUtbytte = andel < 20 ? 0 : mottattUtbytte * (andel / 100)
+  const rentedelUtbytte = mottattUtbytte - aksjedelUtbytte
+  const rentedelSkatt = rentedelUtbytte * (SATS_ALMINNELIG / 100)
+
+  const a = beregnVPS({ kostpris, kurtasje, ubenyttetSkjerming, utbytte: aksjedelUtbytte, aar })
+
+  return {
+    ...a,
+    aksjeandel: andel,
+    utbytte: mottattUtbytte,
+    aksjedelUtbytte,
+    rentedelUtbytte,
+    rentedelSkatt,
+    skattepliktig: a.skattepliktig + rentedelUtbytte,
+    skatt: a.skatt + rentedelSkatt,
+    utenSkjerming: a.utenSkjerming + rentedelSkatt,
+  }
+}
+
+/**
  * Regner ut gevinst/tap ved salg av aksjer på vanlig konto (VPS), med
  * skjermingsfradrag mot gevinsten.
  *
@@ -153,6 +210,80 @@ export function beregnGevinstVedSalg({ kostpris, kurtasje = 0, salgssum, salgsku
     skattEffekt,
     utenSkjerming,
     spart,
+    bortfaltSkjerming,
+  }
+}
+
+/**
+ * Regner ut gevinst/tap ved salg av FONDSANDELER (kombinasjons-/rentefond),
+ * med samme 20/80-terskelregel som beregnFondVPS (se kilde-kommentaren der).
+ *
+ * VIKTIG: Skatteetaten sier gevinsten skal splittes med GJENNOMSNITTET av
+ * aksjeandelen i kjøpsåret og salgsåret — det gjennomsnittet må regnes ut
+ * FØR denne funksjonen kalles, og sendes inn som `aksjeandel`.
+ *
+ * Skjermingsgrunnlaget er fortsatt full kostpris + ubenyttet skjerming (ikke
+ * skalert), men skjerming kan bare redusere aksjedelen av gevinsten — akkurat
+ * som ved utbytte i beregnFondVPS. Rentedelen beskattes/gir fradrag alltid
+ * med 22 % flatt, uten skjerming og uten oppjusteringsfaktor. Ubrukt skjerming
+ * ved salg fremføres IKKE (samme som beregnGevinstVedSalg for aksjer).
+ */
+export function beregnFondGevinstVedSalg({ kostpris, kurtasje = 0, salgssum, salgskurtasje = 0, ubenyttetSkjerming = 0, aksjeandel, aar = SISTE_AAR }) {
+  const andel = Math.max(0, Math.min(100, Number(aksjeandel) || 0))
+
+  if (andel > 80) {
+    return {
+      ...beregnGevinstVedSalg({ kostpris, kurtasje, salgssum, salgskurtasje, ubenyttetSkjerming, aar }),
+      aksjeandel: andel, aksjedelGevinst: null, rentedelGevinst: 0, rentedelSkattEffekt: 0,
+    }
+  }
+
+  const rente = SKJERMINGSRENTE[aar] ?? SKJERMINGSRENTE[SISTE_AAR]
+  const inngangsverdi = (Number(kostpris) || 0) + (Number(kurtasje) || 0)
+  const nettoSalgssum = (Number(salgssum) || 0) - (Number(salgskurtasje) || 0)
+  const ubenyttet = Number(ubenyttetSkjerming) || 0
+
+  const grunnlag = inngangsverdi + ubenyttet
+  const skjerming = grunnlag * (rente / 100)
+
+  const gevinstFoerSkjerming = nettoSalgssum - inngangsverdi
+  const erGevinst = gevinstFoerSkjerming > 0
+
+  // Aksjedel og rentedel har alltid samme fortegn som gevinstFoerSkjerming —
+  // begge er bare en proporsjonal andel av samme tall.
+  const aksjedelGevinst = andel < 20 ? 0 : gevinstFoerSkjerming * (andel / 100)
+  const rentedelGevinst = gevinstFoerSkjerming - aksjedelGevinst
+  const rentedelSkattEffekt = rentedelGevinst * (SATS_ALMINNELIG / 100)
+
+  const brukt = erGevinst ? Math.min(skjerming, aksjedelGevinst) : 0
+  const skattepliktigAksjedel = erGevinst ? Math.max(0, aksjedelGevinst - skjerming) : 0
+  const bortfaltSkjerming = erGevinst ? Math.max(0, skjerming - aksjedelGevinst) : skjerming
+  const skattAksjedel = skattepliktigAksjedel * (EFFEKTIV_SATS / 100)
+  const skattEffektAksjedel = erGevinst ? skattAksjedel : -Math.abs(aksjedelGevinst) * (EFFEKTIV_SATS / 100)
+
+  const skattepliktig = skattepliktigAksjedel + Math.max(0, rentedelGevinst)
+  const tap = erGevinst ? 0 : gevinstFoerSkjerming
+  const skatt = skattAksjedel + Math.max(0, rentedelSkattEffekt)
+  const skattEffekt = skattEffektAksjedel + rentedelSkattEffekt
+
+  return {
+    rente,
+    inngangsverdi,
+    ubenyttetInn: ubenyttet,
+    grunnlag,
+    skjerming,
+    salgssum: nettoSalgssum,
+    gevinstFoerSkjerming,
+    erGevinst,
+    aksjeandel: andel,
+    aksjedelGevinst,
+    rentedelGevinst,
+    rentedelSkattEffekt,
+    brukt,
+    skattepliktig,
+    tap,
+    skatt,
+    skattEffekt,
     bortfaltSkjerming,
   }
 }

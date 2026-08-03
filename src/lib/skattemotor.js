@@ -8,7 +8,7 @@
 // måneder — dekker IKKE nødvendigvis hele skatteåret hvis det er lenge siden
 // årsskiftet. Se dekkerHeleAaret.
 
-import { beregnVPS, beregnGevinstVedSalg, SISTE_AAR } from './skattekalkulator'
+import { beregnVPS, beregnFondVPS, beregnGevinstVedSalg, beregnFondGevinstVedSalg, SISTE_AAR } from './skattekalkulator'
 import { finnTicker } from './tickers'
 
 const AAR_START = Date.UTC(SISTE_AAR, 0, 1) / 1000
@@ -43,6 +43,7 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
   const rader = []
   const utenKostpris = []
   const ikkeVPS = []
+  const manglerAksjeandel = []
 
   for (const p of posisjoner || []) {
     // Eldre importerte posisjoner mangler konto_type — de behandles som VPS for
@@ -50,6 +51,12 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
     if (p.konto_type === 'ask') { ikkeVPS.push(p); continue }
     if (p.antall == null) continue
     if (p.gav == null) { utenKostpris.push(p); continue }
+
+    // Fond (kombinasjons-/rentefond) trenger aksjeandelen for å vite hvor mye
+    // av avkastningen som faktisk får skjerming — uten den kan vi ikke regne
+    // et pålitelig tall, og heller ikke anta at det er et rent aksjefond.
+    const erFond = p.verdipapir_type === 'fond'
+    if (erFond && (p.aksjeandel == null || p.aksjeandel === '')) { manglerAksjeandel.push(p); continue }
 
     const noekkel = noekkelFor(p)
     const ticker = p.ticker || finnTicker(p.navn)
@@ -68,21 +75,33 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
     const ubenyttetStr = ubenyttetOverstyrt[noekkel]
     const ubenyttetInn = ubenyttetStr !== undefined ? (Number(ubenyttetStr) || 0) : ubenyttetAuto
 
-    const r = beregnVPS({
-      kostpris: p.gav * p.antall,
-      kurtasje: 0,
-      ubenyttetSkjerming: ubenyttetInn,
-      utbytte,
-      aar: SISTE_AAR,
-    })
+    const r = erFond
+      ? beregnFondVPS({
+          kostpris: p.gav * p.antall,
+          kurtasje: 0,
+          ubenyttetSkjerming: ubenyttetInn,
+          utbytte,
+          aksjeandel: p.aksjeandel,
+          aar: SISTE_AAR,
+        })
+      : beregnVPS({
+          kostpris: p.gav * p.antall,
+          kurtasje: 0,
+          ubenyttetSkjerming: ubenyttetInn,
+          utbytte,
+          aar: SISTE_AAR,
+        })
 
     // Hypotetisk «hvis du selger i dag»-projeksjon — bruker samme ubenyttetInn
     // som utbytteberegningen over. De to er ALTERNATIVER (du får enten utbytte
     // og fremfører ubenyttet skjerming, ELLER selger og skjermingen bortfaller),
     // ikke noe som skal legges sammen med totalene i Min skatt.
+    // Ekskludert for fond: gevinst ved salg av fondsandeler skal splittes med
+    // GJENNOMSNITTET av aksjeandelen i kjøpsåret og salgsåret, som vi ikke
+    // har lagret — vi viser ikke et gevinsttall vi ikke kan stå inne for.
     const harLivePris = !!pd?.pris && !pd.feil
     const verdiNaa = harLivePris ? pd.pris * fxKurs * p.antall : (p.markedsverdi ?? null)
-    const g = verdiNaa != null ? beregnGevinstVedSalg({
+    const g = (!erFond && verdiNaa != null) ? beregnGevinstVedSalg({
       kostpris: p.gav * p.antall,
       kurtasje: 0,
       salgssum: verdiNaa,
@@ -97,17 +116,46 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
       utbytteFelt: utbytteStr !== undefined ? utbytteStr : (utbytteAutoNOK > 0 ? String(Math.round(utbytteAutoNOK)) : ''),
       dekkerHeleAaret: ut.dekkerHeleAaret,
       ubenyttetFelt: ubenyttetStr !== undefined ? ubenyttetStr : (ubenyttetAuto > 0 ? String(Math.round(ubenyttetAuto)) : ''),
+      erFond, aksjeandel: erFond ? p.aksjeandel : null,
       r,
       verdiNaa, harLivePris, g,
     })
   }
-  return { rader, utenKostpris, ikkeVPS }
+  return { rader, utenKostpris, ikkeVPS, manglerAksjeandel }
+}
+
+// Setter verdipapir-typen (aksje/fond) og aksjeandelen på en posisjon.
+// Oppdaterer ALLE rader med samme identitet (isin, eller navn hvis isin
+// mangler) på tvers av kontoer — dette er en egenskap ved selve verdipapiret,
+// ikke ved hvilken konto det ligger på.
+export async function oppdaterVerdipapirType(supabase, brukerId, posisjon, { verdipapirType, aksjeandel }) {
+  let query = supabase.from('posisjoner').update({
+    verdipapir_type: verdipapirType,
+    aksjeandel: verdipapirType === 'fond' ? aksjeandel : null,
+  }).eq('bruker_id', brukerId)
+  query = posisjon.isin ? query.eq('isin', posisjon.isin) : query.eq('navn', posisjon.navn).is('isin', null)
+  const { error } = await query
+  if (error) throw new Error(error.message)
 }
 
 // Regner ut gevinst/tap for ETT lagret, faktisk salg (ikke en hypotese som
-// «hvis du selger i dag»). Ren wrapper rundt beregnGevinstVedSalg som gjør
-// om lagrede felter til riktig input.
+// «hvis du selger i dag»). Ren wrapper rundt beregnGevinstVedSalg/
+// beregnFondGevinstVedSalg som gjør om lagrede felter til riktig input.
+// Fondssalg bruker aksjeandelen som ble lagret PÅ SALGET (gjennomsnittet av
+// kjøpsår og salgsår, regnet ut ved registrering) — ikke posisjonens
+// nåværende aksjeandel, som kan ha blitt endret eller forsvunnet siden.
 export function beregnRealisertSalg(salg) {
+  if (salg.er_fond) {
+    return beregnFondGevinstVedSalg({
+      kostpris: salg.kostpris,
+      kurtasje: 0,
+      salgssum: salg.salgssum,
+      salgskurtasje: salg.salgskurtasje,
+      ubenyttetSkjerming: salg.ubenyttet_skjerming,
+      aksjeandel: salg.aksjeandel,
+      aar: salg.aar,
+    })
+  }
   return beregnGevinstVedSalg({
     kostpris: salg.kostpris,
     kurtasje: 0,
@@ -151,6 +199,8 @@ export async function lagreRealisertSalg(supabase, brukerId, salg) {
     ubenyttet_skjerming: salg.ubenyttet_skjerming || 0,
     dato: salg.dato,
     aar: salg.aar,
+    er_fond: !!salg.er_fond,
+    aksjeandel: salg.er_fond ? salg.aksjeandel : null,
   })
   if (error) throw new Error(error.message)
 }

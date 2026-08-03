@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { hentPriser } from '../lib/prices'
-import { beregnASK, beregnGevinstVedSalg, kr, krDes, SISTE_AAR, EFFEKTIV_SATS } from '../lib/skattekalkulator'
+import { beregnASK, beregnGevinstVedSalg, beregnFondGevinstVedSalg, kr, krDes, SISTE_AAR, EFFEKTIV_SATS } from '../lib/skattekalkulator'
 import {
-  beregnVPSPortefolje, hentSkjermingRader, lagreSkjerming,
+  beregnVPSPortefolje, hentSkjermingRader, lagreSkjerming, oppdaterVerdipapirType,
   beregnRealisertSalg, summerRealiserteSalg, hentRealiserteSalg, lagreRealisertSalg, slettRealisertSalg,
 } from '../lib/skattemotor'
 import { parseTransaksjonerCSV, beregnLavesteSaldo } from '../lib/nordnetTransaksjoner'
@@ -31,6 +31,11 @@ create policy "egen skjerming" on skjerming
   for all
   using (auth.uid() = bruker_id)
   with check (auth.uid() = bruker_id);`
+
+const FOND_SQL = `alter table posisjoner add column if not exists verdipapir_type text;
+alter table posisjoner add column if not exists aksjeandel numeric;
+alter table realiserte_salg add column if not exists er_fond boolean default false;
+alter table realiserte_salg add column if not exists aksjeandel numeric;`
 
 const REALISERT_SQL = `create table if not exists realiserte_salg (
   id uuid primary key default gen_random_uuid(),
@@ -83,6 +88,12 @@ export default function MinSkatt() {
   const [lagretOk, setLagretOk] = useState(false)
   const [manglerTabell, setManglerTabell] = useState(false)
 
+  // Fond (type/aksjeandel per posisjon)
+  const [fondRediger, setFondRediger] = useState({})
+  const [fondLagrer, setFondLagrer] = useState(null)
+  const [fondFeil, setFondFeil] = useState('')
+  const [manglerFondKolonner, setManglerFondKolonner] = useState(false)
+
   // Realiserte salg
   const [realiserteSalg, setRealiserteSalg] = useState([])
   const [manglerSalgTabell, setManglerSalgTabell] = useState(false)
@@ -92,6 +103,7 @@ export default function MinSkatt() {
   const [salgKurtasje, setSalgKurtasje] = useState('')
   const [salgUbenyttet, setSalgUbenyttet] = useState('')
   const [salgUbenyttetTouched, setSalgUbenyttetTouched] = useState(false)
+  const [salgAksjeandelKjop, setSalgAksjeandelKjop] = useState('')
   const [salgDato, setSalgDato] = useState(() => new Date().toISOString().slice(0, 10))
   const [salgLagrer, setSalgLagrer] = useState(false)
   const [salgFeil, setSalgFeil] = useState('')
@@ -149,13 +161,21 @@ export default function MinSkatt() {
     [skjermingRader]
   )
 
-  const { rader, utenKostpris, ikkeVPS } = useMemo(
+  const { rader, utenKostpris, ikkeVPS, manglerAksjeandel } = useMemo(
     () => beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt }),
     [posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt]
   )
 
   const salgValgtPosisjon = rader.find((x) => x.noekkel === salgNoekkel) || null
   const salgKostprisPerAksje = salgValgtPosisjon ? salgValgtPosisjon.r.inngangsverdi / salgValgtPosisjon.antall : 0
+
+  // Ved salg av fond skal aksjeandelen være GJENNOMSNITTET av andelen i
+  // kjøpsåret og salgsåret (Skatteetaten) — salgsårets andel er den vi
+  // allerede har lagret på posisjonen (aksjeandel ved inntektsårets
+  // begynnelse), kjøpsårets andel må brukeren oppgi selv.
+  const salgAksjeandelSnitt = salgValgtPosisjon?.erFond && salgAksjeandelKjop !== ''
+    ? (Number(salgAksjeandelKjop) + Number(salgValgtPosisjon.aksjeandel)) / 2
+    : null
 
   // Foreslår ubenyttet skjerming proporsjonalt med hvor stor andel av
   // posisjonen som selges — brukeren kan alltid overstyre.
@@ -169,22 +189,33 @@ export default function MinSkatt() {
   }, [salgNoekkel, salgAntall])
 
   const salgForhandsvisning = salgValgtPosisjon && Number(salgAntall) > 0 && salgSum !== ''
-    ? beregnGevinstVedSalg({
-        kostpris: salgKostprisPerAksje * Number(salgAntall),
-        salgssum: salgSum, salgskurtasje: salgKurtasje, ubenyttetSkjerming: salgUbenyttet, aar: SISTE_AAR,
-      })
+    && (!salgValgtPosisjon.erFond || salgAksjeandelSnitt != null)
+    ? (salgValgtPosisjon.erFond
+        ? beregnFondGevinstVedSalg({
+            kostpris: salgKostprisPerAksje * Number(salgAntall),
+            salgssum: salgSum, salgskurtasje: salgKurtasje, ubenyttetSkjerming: salgUbenyttet,
+            aksjeandel: salgAksjeandelSnitt, aar: SISTE_AAR,
+          })
+        : beregnGevinstVedSalg({
+            kostpris: salgKostprisPerAksje * Number(salgAntall),
+            salgssum: salgSum, salgskurtasje: salgKurtasje, ubenyttetSkjerming: salgUbenyttet, aar: SISTE_AAR,
+          }))
     : null
 
   const realisertTotal = useMemo(() => summerRealiserteSalg(realiserteSalg), [realiserteSalg])
 
   function nullstillSalgSkjema() {
     setSalgNoekkel(''); setSalgAntall(''); setSalgSum(''); setSalgKurtasje('')
-    setSalgUbenyttet(''); setSalgUbenyttetTouched(false)
+    setSalgUbenyttet(''); setSalgUbenyttetTouched(false); setSalgAksjeandelKjop('')
     setSalgDato(new Date().toISOString().slice(0, 10))
   }
 
   async function handleLagreSalg() {
     if (!user || !salgValgtPosisjon) return
+    if (salgValgtPosisjon.erFond && salgAksjeandelSnitt == null) {
+      setSalgFeil('Fyll inn aksjeandelen ved kjøp før du registrerer salget.')
+      return
+    }
     setSalgLagrer(true); setSalgFeil('')
     try {
       await lagreRealisertSalg(supabase, user.id, {
@@ -197,11 +228,14 @@ export default function MinSkatt() {
         ubenyttet_skjerming: Number(salgUbenyttet) || 0,
         dato: salgDato,
         aar: SISTE_AAR,
+        er_fond: salgValgtPosisjon.erFond,
+        aksjeandel: salgValgtPosisjon.erFond ? salgAksjeandelSnitt : null,
       })
       setRealiserteSalg(await hentRealiserteSalg(supabase))
       nullstillSalgSkjema()
     } catch (e) {
-      setSalgFeil(e.message)
+      if (/(er_fond|aksjeandel)/i.test(e.message) && /(does not exist|could not find)/i.test(e.message)) setManglerFondKolonner(true)
+      else setSalgFeil(e.message)
     } finally {
       setSalgLagrer(false)
     }
@@ -271,6 +305,41 @@ export default function MinSkatt() {
   const harVPS = posisjoner.length > 0
   const harNoe = harVPS || askResultat
 
+  function startFondRediger(x) {
+    setFondFeil('')
+    setFondRediger((s) => ({
+      ...s,
+      [x.noekkel]: s[x.noekkel] !== undefined
+        ? s[x.noekkel]
+        : { type: x.erFond ? 'fond' : 'aksje', aksjeandel: x.aksjeandel != null ? String(x.aksjeandel) : '' },
+    }))
+  }
+
+  async function handleLagreFondType(x) {
+    const rediger = fondRediger[x.noekkel]
+    if (!rediger || !user) return
+    if (rediger.type === 'fond' && rediger.aksjeandel === '') {
+      setFondFeil('Fyll inn aksjeandelen (0–100) før du lagrer.')
+      return
+    }
+    setFondLagrer(x.noekkel); setFondFeil('')
+    try {
+      await oppdaterVerdipapirType(supabase, user.id, { isin: x.isin, navn: x.navn }, {
+        verdipapirType: rediger.type,
+        aksjeandel: rediger.type === 'fond' ? Number(rediger.aksjeandel) : null,
+      })
+      const { data } = await supabase.from('posisjoner').select('*').order('markedsverdi', { ascending: false })
+      setPosisjoner(data || [])
+      setFondRediger((s) => { const n = { ...s }; delete n[x.noekkel]; return n })
+      setManglerFondKolonner(false)
+    } catch (e) {
+      if (/(verdipapir_type|aksjeandel)/i.test(e.message) && /(does not exist|could not find)/i.test(e.message)) setManglerFondKolonner(true)
+      else setFondFeil(e.message)
+    } finally {
+      setFondLagrer(null)
+    }
+  }
+
   async function handleLagre() {
     if (!user) return
     setLagrer(true); setLagretOk(false); setFeil('')
@@ -309,6 +378,17 @@ export default function MinSkatt() {
             du oppretter den. Lim inn dette i Supabase → SQL Editor → Run (kun én gang):
           </p>
           <pre className="motor-sql">{SKJERMING_SQL}</pre>
+        </div>
+      )}
+
+      {manglerFondKolonner && (
+        <div className="kalk-fremfor" style={{ marginBottom: 18 }}>
+          <div className="kalk-fremfor-tittel">Én rask ting i Supabase, så kan du merke fondsandeler</div>
+          <p>
+            Å merke en posisjon som fond krever to nye kolonner på posisjoner-tabellen som ikke finnes i
+            prosjektet ditt ennå. Lim inn dette i Supabase → SQL Editor → Run (kun én gang):
+          </p>
+          <pre className="motor-sql">{FOND_SQL}</pre>
         </div>
       )}
 
@@ -371,8 +451,12 @@ export default function MinSkatt() {
             <tbody>
               {rader.map((x) => (
                 <Fragment key={x.noekkel}>
-                  <tr className="motor-rad" onClick={() => setApen(apen === x.noekkel ? null : x.noekkel)}>
-                    <td><div className="tick"><span className="nm">{x.navn}</span></div></td>
+                  <tr className="motor-rad" onClick={() => {
+                    const vilApne = apen !== x.noekkel
+                    setApen(vilApne ? x.noekkel : null)
+                    if (vilApne) startFondRediger(x)
+                  }}>
+                    <td><div className="tick"><span className="nm">{x.navn}</span>{x.erFond && <span className="motor-fond-merke">Fond</span>}</div></td>
                     <td className="r mono">{kr(x.r.inngangsverdi)}</td>
                     <td className="r mono" onClick={(e) => e.stopPropagation()}>
                       <span className="motor-utbytte-felt">
@@ -409,7 +493,16 @@ export default function MinSkatt() {
                           <div className="kalk-rad"><span>× Skjermingsrente {SISTE_AAR}</span><b>{x.r.rente} %</b></div>
                           <div className="kalk-rad resultat"><span>= Skjermingsfradrag</span><b>{krDes(x.r.skjerming)}</b></div>
                           <div className="kalk-rad" style={{ marginTop: 10 }}><span>Utbytte mottatt</span><b>{kr(x.r.utbytte)}</b></div>
-                          <div className="kalk-rad"><span>− Skjermingsfradrag</span><b>−{krDes(Math.min(x.r.skjerming, x.r.utbytte))}</b></div>
+                          {x.erFond && (
+                            <>
+                              <div className="kalk-rad"><span>　– herav aksjedel ({x.r.aksjeandel} % av fondet)</span><b>{kr(x.r.aksjedelUtbytte)}</b></div>
+                              <div className="kalk-rad"><span>　– herav rentedel</span><b>{kr(x.r.rentedelUtbytte)}</b></div>
+                            </>
+                          )}
+                          <div className="kalk-rad"><span>− Skjermingsfradrag{x.erFond && ' (kun mot aksjedelen)'}</span><b>−{krDes(x.r.brukt)}</b></div>
+                          {x.erFond && x.r.rentedelUtbytte > 0 && (
+                            <div className="kalk-rad"><span>+ Skatt på rentedel (22 %, ingen skjerming)</span><b>{krDes(x.r.rentedelSkatt)}</b></div>
+                          )}
                           <div className="kalk-rad sum"><span>= Skattepliktig</span><b>{krDes(x.r.skattepliktig)}</b></div>
                           <div className="kalk-rad resultat"><span>= Skatt å betale</span><b>{krDes(x.r.skatt)}</b></div>
                           {x.r.nyUbenyttet > 0 && (
@@ -417,6 +510,39 @@ export default function MinSkatt() {
                           )}
                           {!x.fantData && <div className="import-hint" style={{ marginTop: 10 }}>Fant ikke utbyttehistorikk automatisk for denne aksjen — utbytte må fylles inn manuelt.</div>}
                         </div>
+
+                        {fondRediger[x.noekkel] && (
+                          <div className="kalk-regnestykke motor-detalj" style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                            <div className="kalk-tittel">Type verdipapir</div>
+                            <select className="kalk-select" value={fondRediger[x.noekkel].type}
+                              onChange={(e) => setFondRediger((s) => ({ ...s, [x.noekkel]: { ...s[x.noekkel], type: e.target.value } }))}>
+                              <option value="aksje">Aksje / rent aksjefond (aksjeandel over 80 %)</option>
+                              <option value="fond">Fond med kjent aksjeandel (kombinasjons-/rentefond)</option>
+                            </select>
+                            {fondRediger[x.noekkel].type === 'fond' && (
+                              <div className="kalk-felt" style={{ marginTop: 10 }}>
+                                <label>Aksjeandel i fondet ved inntektsårets begynnelse</label>
+                                <div className="kalk-hjelp">
+                                  Finnes i fondets årsrapport eller hos forvalter. Under 20 % skattlegges alt som
+                                  renteinntekt (22 %), over 80 % som aksjeutbytte, 20–80 % splittes forholdsmessig.
+                                </div>
+                                <div className="kalk-input">
+                                  <input type="number" inputMode="decimal" min="0" max="100"
+                                    value={fondRediger[x.noekkel].aksjeandel}
+                                    onChange={(e) => setFondRediger((s) => ({ ...s, [x.noekkel]: { ...s[x.noekkel], aksjeandel: e.target.value } }))}
+                                    placeholder="0-100" />
+                                  <span className="kalk-enhet">%</span>
+                                </div>
+                              </div>
+                            )}
+                            {fondFeil && <div className="import-feil" style={{ marginTop: 10 }}>{fondFeil}</div>}
+                            <button type="button" className="btn ghost" style={{ marginTop: 10 }}
+                              disabled={fondLagrer === x.noekkel}
+                              onClick={() => handleLagreFondType(x)}>
+                              {fondLagrer === x.noekkel ? 'Lagrer …' : 'Lagre type'}
+                            </button>
+                          </div>
+                        )}
 
                         {x.g && (
                           <div className="kalk-regnestykke motor-detalj" style={{ marginTop: 10 }}>
@@ -477,6 +603,14 @@ export default function MinSkatt() {
         </div>
       )}
 
+      {type === 'vps' && manglerAksjeandel.length > 0 && (
+        <div className="muted-note">
+          {manglerAksjeandel.length} posisjon{manglerAksjeandel.length > 1 ? 'er' : ''} er merket som fond, men
+          mangler aksjeandel-prosenten og er ikke tatt med i skjermingsberegningen:{' '}
+          {manglerAksjeandel.map((p) => p.navn).join(', ')}. Åpne posisjonen for å fylle den inn.
+        </div>
+      )}
+
       {type === 'vps' && (
         <div className="panel" style={{ marginTop: 18 }}>
           <div className="panel-h">
@@ -509,7 +643,7 @@ export default function MinSkatt() {
                     const g = beregnRealisertSalg(salg)
                     return (
                       <tr key={salg.id}>
-                        <td><span className="nm">{salg.navn}</span></td>
+                        <td><span className="nm">{salg.navn}</span>{salg.er_fond && <span className="motor-fond-merke">Fond</span>}</td>
                         <td className="r mono">{salg.dato}</td>
                         <td className="r mono">{salg.antall}</td>
                         <td className="r mono">{g.erGevinst ? kr(g.gevinstFoerSkjerming) : kr(g.tap)}</td>
@@ -544,13 +678,23 @@ export default function MinSkatt() {
               value={salgNoekkel} onChange={(e) => { setSalgNoekkel(e.target.value); setSalgUbenyttetTouched(false) }}>
               <option value="">— velg aksje —</option>
               {rader.map((x) => (
-                <option key={x.noekkel} value={x.noekkel}>{x.navn} ({x.antall} stk eid)</option>
+                <option key={x.noekkel} value={x.noekkel}>{x.navn}{x.erFond ? ' (fond)' : ''} ({x.antall} stk eid)</option>
               ))}
             </select>
           </div>
           {salgValgtPosisjon && (
             <>
               <Felt label="Antall solgt" verdi={salgAntall} setVerdi={setSalgAntall} enhet="stk" />
+              {salgValgtPosisjon.erFond && (
+                <>
+                  <Felt label="Aksjeandel ved kjøp"
+                    hjelp="Fondets aksjeandel det året du kjøpte andelene — finnes i fondets årsrapport for det året. Gjennomsnittet av denne og aksjeandelen ved salg (i dag lagret på posisjonen) brukes til å splitte gevinsten."
+                    verdi={salgAksjeandelKjop} setVerdi={setSalgAksjeandelKjop} enhet="%" />
+                  {salgAksjeandelSnitt != null && (
+                    <div className="muted-note">Gjennomsnittlig aksjeandel brukt i beregningen: {salgAksjeandelSnitt.toFixed(1)} %</div>
+                  )}
+                </>
+              )}
               {Number(salgAntall) > 0 && Number(salgAntall) < salgValgtPosisjon.antall && (
                 <div className="kalk-import-disclaimer">
                   <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
@@ -578,9 +722,18 @@ export default function MinSkatt() {
                     <span>= {salgForhandsvisning.erGevinst ? 'Gevinst før skjerming' : 'Tap'}</span>
                     <b>{salgForhandsvisning.erGevinst ? kr(salgForhandsvisning.gevinstFoerSkjerming) : kr(salgForhandsvisning.tap)}</b>
                   </div>
+                  {salgValgtPosisjon.erFond && salgForhandsvisning.aksjeandel <= 80 && (
+                    <>
+                      <div className="kalk-rad"><span>　– herav aksjedel ({salgForhandsvisning.aksjeandel.toFixed(1)} %)</span><b>{kr(salgForhandsvisning.aksjedelGevinst)}</b></div>
+                      <div className="kalk-rad"><span>　– herav rentedel</span><b>{kr(salgForhandsvisning.rentedelGevinst)}</b></div>
+                    </>
+                  )}
                   {salgForhandsvisning.erGevinst ? (
                     <>
-                      <div className="kalk-rad"><span>− Skjermingsfradrag brukt</span><b>−{krDes(salgForhandsvisning.brukt)}</b></div>
+                      <div className="kalk-rad"><span>− Skjermingsfradrag brukt{salgValgtPosisjon.erFond && ' (kun mot aksjedelen)'}</span><b>−{krDes(salgForhandsvisning.brukt)}</b></div>
+                      {salgValgtPosisjon.erFond && salgForhandsvisning.rentedelGevinst > 0 && (
+                        <div className="kalk-rad"><span>+ Skatt på rentedel (22 %, ingen skjerming)</span><b>{krDes(salgForhandsvisning.rentedelSkattEffekt)}</b></div>
+                      )}
                       <div className="kalk-rad sum"><span>= Skattepliktig gevinst</span><b>{krDes(salgForhandsvisning.skattepliktig)}</b></div>
                       <div className="kalk-rad resultat"><span>= Skatt å betale</span><b>{krDes(salgForhandsvisning.skatt)}</b></div>
                     </>
@@ -596,7 +749,8 @@ export default function MinSkatt() {
               )}
 
               {salgFeil && <div className="import-feil" style={{ marginTop: 14 }}>{salgFeil}</div>}
-              <button className="btn" style={{ marginTop: 14 }} disabled={salgLagrer || !salgAntall || !salgSum}
+              <button className="btn" style={{ marginTop: 14 }}
+                disabled={salgLagrer || !salgAntall || !salgSum || (salgValgtPosisjon.erFond && salgAksjeandelSnitt == null)}
                 onClick={handleLagreSalg}>
                 {salgLagrer ? 'Lagrer …' : 'Registrer salget'}
               </button>
