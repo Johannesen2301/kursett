@@ -32,7 +32,8 @@ export default function Personvern() {
 
             <h2>Hvem er ansvarlig</h2>
             <p>
-              Kursett er behandlingsansvarlig for opplysningene dine. Spørsmål? Ta kontakt via
+              Kursett er laget og driftes av Johannes, én person i Norge, ikke et selskap — jeg er
+              behandlingsansvarlig for opplysningene dine. Spørsmål? Ta kontakt via
               e-postadressen nederst.
             </p>
 

@@ -684,6 +684,8 @@ textarea:focus{outline:none;border-color:var(--teal-deep)}
 .kalk-bunn{max-width:680px;margin:26px auto 0}
 .kalk-disclaimer{font-size:13px;color:var(--faint);line-height:1.6;text-align:center;padding:0 10px}
 .kalk-disclaimer a{color:var(--teal-deep);font-weight:600}
+.kalk-om{font-size:13px;color:var(--faint);line-height:1.6;text-align:center;padding:0 10px;margin-top:10px}
+.kalk-om a{color:var(--teal-deep);font-weight:600}
 .kalk-videre{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
 .kalk-kort{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:17px 19px;text-decoration:none;transition:.15s}
 .kalk-kort:hover{border-color:var(--teal-deep);transform:translateY(-1px)}

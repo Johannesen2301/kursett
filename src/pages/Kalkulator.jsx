@@ -32,8 +32,11 @@ function Felt({ label, hjelp, verdi, setVerdi, enhet = 'kr', valgfri }) {
   )
 }
 
+const AAR_VALG = Object.keys(SKJERMINGSRENTE).map(Number).sort((a, b) => b - a)
+
 export default function Kalkulator() {
   const [type, setType] = useState('vps')
+  const [aar, setAar] = useState(SISTE_AAR)
   const { user } = useAuth()
 
   // VPS
@@ -91,13 +94,13 @@ export default function Kalkulator() {
   }
 
   const askBeregning = askTransaksjoner
-    ? beregnLavesteSaldo({ transaksjoner: askTransaksjoner.transaksjoner, startSaldo: askStartSaldo, aar: SISTE_AAR })
+    ? beregnLavesteSaldo({ transaksjoner: askTransaksjoner.transaksjoner, startSaldo: askStartSaldo, aar })
     : null
 
   useEffect(() => {
     if (!askBeregning || askBeregning.antall === 0) return
     setInnskudd(String(Math.round(askBeregning.laveste)))
-  }, [askTransaksjoner, askStartSaldo])
+  }, [askTransaksjoner, askStartSaldo, aar])
 
   // Salg (gevinst/tap ved salg av aksjer, VPS)
   const [salgKostpris, setSalgKostpris] = useState('')
@@ -127,12 +130,12 @@ export default function Kalkulator() {
   const harSalg = salgKostpris !== '' && salgssum !== ''
 
   const r = type === 'vps'
-    ? beregnVPS({ kostpris, kurtasje, utbytte, ubenyttetSkjerming: ubenyttet })
+    ? beregnVPS({ kostpris, kurtasje, utbytte, ubenyttetSkjerming: ubenyttet, aar })
     : type === 'ask'
-    ? beregnASK({ lavesteInnskudd: innskudd, uttak, ubenyttetSkjerming: ubenyttetAsk })
+    ? beregnASK({ lavesteInnskudd: innskudd, uttak, ubenyttetSkjerming: ubenyttetAsk, aar })
     : beregnGevinstVedSalg({
         kostpris: salgKostpris, kurtasje: salgKurtasje, salgssum, salgskurtasje,
-        ubenyttetSkjerming: salgUbenyttet,
+        ubenyttetSkjerming: salgUbenyttet, aar,
       })
 
   const visResultat = type === 'vps' ? harVPS : type === 'ask' ? harASK : harSalg
@@ -190,6 +193,12 @@ export default function Kalkulator() {
         </div>
 
         <div className="kalk-innhold">
+          <div className="kalk-felt">
+            <label>Inntektsår</label>
+            <select className="kalk-select" value={aar} onChange={(e) => setAar(Number(e.target.value))}>
+              {AAR_VALG.map((a) => (<option key={a} value={a}>{a}</option>))}
+            </select>
+          </div>
           {type === 'vps' ? (
             <>
               {user && posisjoner.length > 0 && (
@@ -258,9 +267,9 @@ export default function Kalkulator() {
                 {askTransaksjoner && askBeregning.antall === 0 && (
                   <div className="import-feil">
                     Fila di har transaksjoner mellom {askTransaksjoner.forsteDato} og {askTransaksjoner.sisteDato} — ikke i{' '}
-                    {SISTE_AAR}. Kalkulatoren kan foreløpig bare regne skjermingsfradrag for {SISTE_AAR}, siden Skatteetaten
-                    først fastsetter skjermingsrenten for et inntektsår i januar året etter. Last opp et kontoutdrag som
-                    dekker {SISTE_AAR} for å bruke denne funksjonen.
+                    {aar}. Skjermingsrenten fastsettes av Skatteetaten per inntektsår i januar året etter, så vi kan bare
+                    regne ut for ett år av gangen. Velg riktig inntektsår over, eller last opp et kontoutdrag som
+                    dekker {aar}.
                   </div>
                 )}
                 {askTransaksjoner && askBeregning.antall > 0 && (
@@ -272,7 +281,7 @@ export default function Kalkulator() {
                       <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
                       <div>
                         Dette forutsetter at feltet over er riktig saldo rett før {askTransaksjoner.forsteDato}, og at fila
-                        dekker resten av {SISTE_AAR} uten hull. Interne overføringer mellom dine egne kontoer telles
+                        dekker resten av {aar} uten hull. Interne overføringer mellom dine egne kontoer telles
                         ikke med. Kursett kvalitetssikrer ikke dette tallet — kontroller alltid mot kontoutdraget ditt før du
                         bruker det i skattemeldingen. Du er selv ansvarlig for at opplysningene i skattemeldingen din er riktige.
                       </div>
@@ -364,7 +373,7 @@ export default function Kalkulator() {
       {visResultat && (
         <div className="kalk-svar">
           <div className="kalk-hovedtall">
-            <div className="kalk-label">Ditt skjermingsfradrag {SISTE_AAR}</div>
+            <div className="kalk-label">Ditt skjermingsfradrag {aar}</div>
             <div className="kalk-tall">{krDes(r.skjerming)}</div>
           </div>
 
@@ -386,7 +395,7 @@ export default function Kalkulator() {
                   <span>= Skjermingsgrunnlag</span><b>{kr(r.grunnlag)}</b>
                 </div>
                 <div className="kalk-rad">
-                  <span>× Skjermingsrente {SISTE_AAR}</span><b>{r.rente} %</b>
+                  <span>× Skjermingsrente {aar}</span><b>{r.rente} %</b>
                 </div>
                 <div className="kalk-rad resultat">
                   <span>= Skjermingsfradrag</span><b>{krDes(r.skjerming)}</b>
@@ -399,7 +408,7 @@ export default function Kalkulator() {
                   <div className="kalk-rad"><span>+ Ubenyttet skjerming</span><b>{kr(Number(ubenyttetAsk))}</b></div>
                 )}
                 <div className="kalk-rad sum"><span>= Skjermingsgrunnlag</span><b>{kr(r.grunnlag)}</b></div>
-                <div className="kalk-rad"><span>× Skjermingsrente {SISTE_AAR}</span><b>{r.rente} %</b></div>
+                <div className="kalk-rad"><span>× Skjermingsrente {aar}</span><b>{r.rente} %</b></div>
                 <div className="kalk-rad resultat"><span>= Skjermingsfradrag</span><b>{krDes(r.skjerming)}</b></div>
               </>
             ) : (
@@ -415,7 +424,7 @@ export default function Kalkulator() {
                   <span>= Skjermingsgrunnlag</span><b>{kr(r.grunnlag)}</b>
                 </div>
                 <div className="kalk-rad">
-                  <span>× Skjermingsrente {SISTE_AAR}</span><b>{r.rente} %</b>
+                  <span>× Skjermingsrente {aar}</span><b>{r.rente} %</b>
                 </div>
                 <div className="kalk-rad resultat">
                   <span>= Skjermingsfradrag tilgjengelig</span><b>{krDes(r.skjerming)}</b>
@@ -561,7 +570,13 @@ export default function Kalkulator() {
         <div className="kalk-disclaimer">
           Dette er en forklaring, ikke skatterådgivning. Kontroller alltid mot{' '}
           <a href="https://www.skatteetaten.no/satser/skjermingsrente-for-aksjer-og-enkeltpersonforetak/"
-            target="_blank" rel="noreferrer">Skatteetaten</a>. Skjermingsrenten for {SISTE_AAR} er {SKJERMINGSRENTE[SISTE_AAR]} %.
+            target="_blank" rel="noreferrer">Skatteetaten</a>. Skjermingsrenten for {aar} er {SKJERMINGSRENTE[aar]} %.
+        </div>
+        <div className="kalk-om">
+          Kursett er laget og driftes av Johannes, én person i Norge — ikke et selskap, ingen investorer, ingen annonser.
+          Det ble bygget fordi jeg selv trengte det. Spørsmål eller tilbakemelding går til{' '}
+          <a href="mailto:kursett.no@gmail.com">kursett.no@gmail.com</a>. Se{' '}
+          <Link to="/personvern">personvernerklæringen</Link> for hva som lagres og hvorfor.
         </div>
 
         <div className="kalk-videre">
