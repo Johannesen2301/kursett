@@ -18,6 +18,7 @@ export default function Rom() {
   const [aktivtRom, setAktivtRom] = useState(null)
   const [romModus, setRomModus] = useState('chat')
   const [meldinger, setMeldinger] = useState([])
+  const [romMedlemmer, setRomMedlemmer] = useState([])
   const navnCache = useRef({})
   const ryddRef = useRef(null)
 
@@ -44,6 +45,7 @@ export default function Rom() {
     const cache = {}
     medlemmer.forEach((m) => { cache[m.bruker_id] = { brukernavn: m.brukernavn, avatar_farge: m.avatar_farge } })
     navnCache.current = cache
+    setRomMedlemmer(medlemmer)
     setMeldinger(await hentRomMeldinger(rom.id))
     await markerLest('rom', rom.id)
     varsler.refresh()
@@ -135,6 +137,9 @@ export default function Rom() {
               <button key={r.id} className={'dm-venn' + (aktivtRom?.id === r.id ? ' aktiv' : '')} onClick={() => aapneRom(r)}>
                 <div className="rom-ikon">#</div>
                 <span className="dm-venn-navn">{r.navn}</span>
+                {varsler.perRomNevnelser?.[r.id] > 0 && (
+                  <span className="nevnelse-tall" title="Du er nevnt her">@{varsler.perRomNevnelser[r.id]}</span>
+                )}
                 {varsler.perRom?.[r.id] > 0 && (
                   <span className="ulest-tall">{varsler.perRom[r.id]}</span>
                 )}
@@ -164,7 +169,9 @@ export default function Rom() {
                 )}
               </div>
               {romModus === 'chat'
-                ? <RomChat rom={aktivtRom} meldinger={meldinger} megId={user.id} onSend={send} onSlett={slett}
+                ? <RomChat rom={aktivtRom} meldinger={meldinger} megId={user.id}
+                    megNavn={navnCache.current[user.id]?.brukernavn} medlemmer={romMedlemmer}
+                    onSend={send} onSlett={slett}
                     erEier={aktivtRom.eier_id === user.id || erAdmin}
                     onBlokkert={async () => { setMeldinger(await hentRomMeldinger(aktivtRom.id)) }} />
                 : <Forum rom={aktivtRom} megId={user.id} />}

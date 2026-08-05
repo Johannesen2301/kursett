@@ -2,27 +2,30 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 
-const VarselContext = createContext({ dm: 0, rom: 0, foresporsler: 0, refresh: () => {} })
+const VarselContext = createContext({ dm: 0, rom: 0, foresporsler: 0, nevnelser: 0, refresh: () => {} })
 
 export function VarselProvider({ children }) {
   const { user } = useAuth()
-  const [tall, setTall] = useState({ dm: 0, rom: 0, foresporsler: 0 })
+  const [tall, setTall] = useState({ dm: 0, rom: 0, foresporsler: 0, nevnelser: 0 })
   const [perVenn, setPerVenn] = useState({})
   const [perRom, setPerRom] = useState({})
+  const [perRomNevnelser, setPerRomNevnelser] = useState({})
 
   const refresh = useCallback(async () => {
     if (!user) return
     try {
-      const [{ data: v }, { data: dm }, { data: rom }] = await Promise.all([
+      const [{ data: v }, { data: dm }, { data: rom }, { data: nevnelser }] = await Promise.all([
         supabase.rpc('varsler'),
         supabase.rpc('uleste_dm'),
         supabase.rpc('uleste_rom'),
+        supabase.rpc('uleste_nevnelser'),
       ])
       if (v && v[0]) {
         setTall({
           dm: Number(v[0].dm) || 0,
           rom: Number(v[0].rom) || 0,
           foresporsler: Number(v[0].foresporsler) || 0,
+          nevnelser: Number(v[0].nevnelser) || 0,
         })
       }
       const dmMap = {}
@@ -32,6 +35,10 @@ export function VarselProvider({ children }) {
       const romMap = {}
       ;(rom || []).forEach((r) => { romMap[r.rom_id] = Number(r.antall) })
       setPerRom(romMap)
+
+      const nevnelserMap = {}
+      ;(nevnelser || []).forEach((r) => { nevnelserMap[r.rom_id] = Number(r.antall) })
+      setPerRomNevnelser(nevnelserMap)
     } catch { /* stille — varsler er ikke kritisk */ }
   }, [user])
 
@@ -60,7 +67,7 @@ export function VarselProvider({ children }) {
   }, [user, refresh])
 
   return (
-    <VarselContext.Provider value={{ ...tall, perVenn, perRom, refresh }}>
+    <VarselContext.Provider value={{ ...tall, perVenn, perRom, perRomNevnelser, refresh }}>
       {children}
     </VarselContext.Provider>
   )

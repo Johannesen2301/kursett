@@ -58,14 +58,39 @@ language sql security definer set search_path = public stable as $$
 $$;
 grant execute on function uleste_rom() to authenticated;
 
+-- ---------- Uleste @-nevnelser, per rom ----------
+-- @nevnelser lagres ikke i egen kolonne — de er bare "@brukernavn" i selve
+-- meldingsteksten. Dette gir et eget varsel (skilt fra generelt ulest-tall)
+-- for meldinger som nevner deg spesifikt, siden forrige lesetidspunkt.
+create or replace function uleste_nevnelser()
+returns table (rom_id uuid, antall bigint)
+language sql security definer set search_path = public stable as $$
+  select rm.rom_id, count(*)
+  from rom_meldinger rm
+  join rom_medlemmer mm on mm.rom_id = rm.rom_id and mm.bruker_id = auth.uid()
+  left join lest_status l
+    on l.bruker_id = auth.uid() and l.type = 'rom' and l.ref_id = rm.rom_id
+  join profiler meg on meg.id = auth.uid()
+  where rm.avsender_id <> auth.uid()
+    and (l.sist_lest is null or rm.opprettet > l.sist_lest)
+    and not er_blokkert(auth.uid(), rm.avsender_id)
+    and meg.brukernavn is not null
+    and position(('@' || meg.brukernavn) in rm.tekst) > 0
+  group by rm.rom_id;
+$$;
+grant execute on function uleste_nevnelser() to authenticated;
+
 -- ---------- Samlet varseltelling (for sidebaren) ----------
+-- Returtypen endres (ny kolonne), så funksjonen må droppes før den lages på nytt.
+drop function if exists varsler();
 create or replace function varsler()
-returns table (dm bigint, rom bigint, foresporsler bigint)
+returns table (dm bigint, rom bigint, foresporsler bigint, nevnelser bigint)
 language sql security definer set search_path = public stable as $$
   select
     coalesce((select sum(antall) from uleste_dm()), 0),
     coalesce((select sum(antall) from uleste_rom()), 0),
     (select count(*) from vennskap v
-      where v.mottaker_id = auth.uid() and v.status = 'ventende');
+      where v.mottaker_id = auth.uid() and v.status = 'ventende'),
+    coalesce((select sum(antall) from uleste_nevnelser()), 0);
 $$;
 grant execute on function varsler() to authenticated;
