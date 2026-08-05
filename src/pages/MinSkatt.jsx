@@ -83,6 +83,7 @@ export default function MinSkatt() {
   const [feil, setFeil] = useState('')
   const [utbytteOverstyrt, setUtbytteOverstyrt] = useState({})
   const [ubenyttetOverstyrt, setUbenyttetOverstyrt] = useState({})
+  const [kreditfradragOverstyrt, setKreditfradragOverstyrt] = useState({})
   const [apen, setApen] = useState(null)
   const [lagrer, setLagrer] = useState(false)
   const [lagretOk, setLagretOk] = useState(false)
@@ -162,8 +163,8 @@ export default function MinSkatt() {
   )
 
   const { rader, utenKostpris, ikkeVPS, manglerAksjeandel } = useMemo(
-    () => beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt }),
-    [posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt]
+    () => beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt, kreditfradragOverstyrt }),
+    [posisjoner, prisdata, skjermingRader, utbytteOverstyrt, ubenyttetOverstyrt, kreditfradragOverstyrt]
   )
 
   const salgValgtPosisjon = rader.find((x) => x.noekkel === salgNoekkel) || null
@@ -504,6 +505,36 @@ export default function MinSkatt() {
                             <div className="kalk-rad"><span>+ Skatt på rentedel (22 %, ingen skjerming)</span><b>{krDes(x.r.rentedelSkatt)}</b></div>
                           )}
                           <div className="kalk-rad sum"><span>= Skattepliktig</span><b>{krDes(x.r.skattepliktig)}</b></div>
+                          {!x.erFond && (
+                            <>
+                              <div className="kalk-rad"><span>= Skatt før kreditfradrag ({EFFEKTIV_SATS} %)</span><b>{krDes(x.r.skattFoerKredit)}</b></div>
+                              <div className="kalk-felt" style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                                <label>
+                                  Kreditfradrag for utenlandsk kildeskatt
+                                  <span className="kalk-valgfri">valgfritt</span>
+                                </label>
+                                <div className="kalk-hjelp">
+                                  Kildeskatt trukket av utenlandsk megler/myndighet, begrenset til skatteavtalens sats
+                                  (f.eks. 15 % for USA) — ikke nødvendigvis alt som ble trukket. Trekkes fra norsk
+                                  skatt på dette utbyttet, aldri under 0.
+                                </div>
+                                <div className="kalk-input">
+                                  <input type="number" inputMode="decimal"
+                                    value={x.kreditfradragFelt}
+                                    onChange={(e) => setKreditfradragOverstyrt((s) => ({ ...s, [x.noekkel]: e.target.value }))}
+                                    placeholder="0" />
+                                  <span className="kalk-enhet">kr</span>
+                                </div>
+                              </div>
+                              {x.r.kreditfradragUbrukt > 0 && (
+                                <div className="import-hint" style={{ marginTop: 10 }}>
+                                  {krDes(x.r.kreditfradragUbrukt)} av kreditfradraget kunne ikke brukes i år, siden det
+                                  oversteg norsk skatt på dette utbyttet. Fremføring til senere år (inntil 5 år) er
+                                  ikke støttet automatisk her ennå — sjekk om du kan kreve det i skattemeldingen selv.
+                                </div>
+                              )}
+                            </>
+                          )}
                           <div className="kalk-rad resultat"><span>= Skatt å betale</span><b>{krDes(x.r.skatt)}</b></div>
                           {x.r.nyUbenyttet > 0 && (
                             <div className="kalk-rad" style={{ marginTop: 10 }}><span>Ubenyttet skjerming videre til {SISTE_AAR + 1}</span><b>{kr(x.r.nyUbenyttet)}</b></div>
@@ -597,10 +628,25 @@ export default function MinSkatt() {
       )}
 
       {type === 'vps' && ikkeVPS.length > 0 && (
-        <div className="muted-note">
-          {ikkeVPS.length} posisjon{ikkeVPS.length > 1 ? 'er' : ''} ligger på en konto merket ASK og regnes ut i
-          ASK-fanen i stedet: {ikkeVPS.map((p) => p.navn).join(', ')}.
-        </div>
+        askResultat ? (
+          <div className="muted-note">
+            {ikkeVPS.length} posisjon{ikkeVPS.length > 1 ? 'er' : ''} ligger på en konto merket ASK og regnes ut i
+            ASK-fanen i stedet: {ikkeVPS.map((p) => p.navn).join(', ')}.
+          </div>
+        ) : (
+          <div className="kalk-import-disclaimer" style={{ marginBottom: 18 }}>
+            <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></svg>
+            <div>
+              {ikkeVPS.length} posisjon{ikkeVPS.length > 1 ? 'er' : ''} ligger på en konto merket ASK, men du har ikke
+              lagt inn kontoutdrag i ASK-fanen ennå — akkurat nå får du derfor <b>ingen skjermingsfradrag</b> for
+              dem: {ikkeVPS.map((p) => p.navn).join(', ')}. Er du sikker på at kontoen faktisk er en
+              aksjesparekonto (ASK), og ikke en vanlig aksjekonto (VPS) som ble feilmerket ved import? Sjekk
+              kontotypen under «Kontoer» i <Link to="/app/portefolje">Min portefølje</Link> hvis du er usikker —
+              er den feilmerket, kan du bytte den der. Er den riktig merket, fyll inn kontoutdraget i ASK-fanen for
+              å faktisk få skjermingsfradraget ditt.
+            </div>
+          </div>
+        )
       )}
 
       {type === 'vps' && manglerAksjeandel.length > 0 && (

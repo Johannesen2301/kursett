@@ -31,6 +31,36 @@ describe('beregnVPS', () => {
     const r = beregnVPS({ kostpris: 10000, kurtasje: 200, ubenyttetSkjerming: 0, utbytte: 0 })
     expect(r.inngangsverdi).toBe(10200)
   })
+
+  it('ingen kreditfradrag oppgitt gir samme resultat som før (bakoverkompatibelt)', () => {
+    const r = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 500 })
+    expect(r.kreditfradragBrukt).toBe(0)
+    expect(r.kreditfradragUbrukt).toBe(0)
+    expect(r.skatt).toBeCloseTo(r.skattFoerKredit, 6)
+  })
+
+  it('kreditfradrag trekkes fra skatten (ikke fra utbyttet/grunnlaget), og skjerming er uendret', () => {
+    const uten = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 5000 })
+    const med = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 5000, kreditfradrag: 200 })
+    expect(med.skjerming).toBeCloseTo(uten.skjerming, 6)
+    expect(med.skattepliktig).toBeCloseTo(uten.skattepliktig, 6)
+    expect(med.skattFoerKredit).toBeCloseTo(uten.skattFoerKredit, 6)
+    expect(med.kreditfradragBrukt).toBe(200)
+    expect(med.skatt).toBeCloseTo(uten.skatt - 200, 6)
+  })
+
+  it('kreditfradrag kan aldri gjøre skatten negativ — overskytende vises som ubrukt, ikke fremført', () => {
+    const r = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 500, kreditfradrag: 100000 })
+    expect(r.skatt).toBe(0)
+    expect(r.kreditfradragBrukt).toBeCloseTo(r.skattFoerKredit, 6)
+    expect(r.kreditfradragUbrukt).toBeCloseTo(100000 - r.skattFoerKredit, 6)
+  })
+
+  it('"spart" (skjermingseffekt) påvirkes ikke av kreditfradrag', () => {
+    const uten = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 5000 })
+    const med = beregnVPS({ kostpris: 10000, ubenyttetSkjerming: 0, utbytte: 5000, kreditfradrag: 200 })
+    expect(med.spart).toBeCloseTo(uten.spart, 6)
+  })
 })
 
 describe('beregnFondVPS', () => {

@@ -36,7 +36,7 @@ export function utbytteIAar(prisdata, antall) {
 // Regner ut skjermingsfradrag per VPS-posisjon i hele porteføljen. Delt mellom
 // Min skatt (redigerbar visning) og Rådgiveren (kontekst til AI-svar), slik at
 // begge alltid viser nøyaktig de samme tallene.
-export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt = {}, ubenyttetOverstyrt = {} }) {
+export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utbytteOverstyrt = {}, ubenyttetOverstyrt = {}, kreditfradragOverstyrt = {} }) {
   const priser = prisdata?.priser || {}
   const fx = prisdata?.fx || { NOK: 1 }
   const skjermingMap = new Map((skjermingRader || []).map((r) => [r.noekkel, r]))
@@ -75,6 +75,11 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
     const ubenyttetStr = ubenyttetOverstyrt[noekkel]
     const ubenyttetInn = ubenyttetStr !== undefined ? (Number(ubenyttetStr) || 0) : ubenyttetAuto
 
+    // Kreditfradrag for utenlandsk kildeskatt — kun for vanlige aksjer i v1.
+    // Ikke støttet for fond ennå (samme bevisste avgrensning som salg av fond).
+    const kreditfradragStr = kreditfradragOverstyrt[noekkel]
+    const kreditfradrag = !erFond && kreditfradragStr !== undefined ? (Number(kreditfradragStr) || 0) : 0
+
     const r = erFond
       ? beregnFondVPS({
           kostpris: p.gav * p.antall,
@@ -89,6 +94,7 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
           kurtasje: 0,
           ubenyttetSkjerming: ubenyttetInn,
           utbytte,
+          kreditfradrag,
           aar: SISTE_AAR,
         })
 
@@ -116,6 +122,7 @@ export function beregnVPSPortefolje({ posisjoner, prisdata, skjermingRader, utby
       utbytteFelt: utbytteStr !== undefined ? utbytteStr : (utbytteAutoNOK > 0 ? String(Math.round(utbytteAutoNOK)) : ''),
       dekkerHeleAaret: ut.dekkerHeleAaret,
       ubenyttetFelt: ubenyttetStr !== undefined ? ubenyttetStr : (ubenyttetAuto > 0 ? String(Math.round(ubenyttetAuto)) : ''),
+      kreditfradragFelt: kreditfradragStr !== undefined ? kreditfradragStr : '',
       erFond, aksjeandel: erFond ? p.aksjeandel : null,
       r,
       verdiNaa, harLivePris, g,

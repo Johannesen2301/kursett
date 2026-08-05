@@ -25,8 +25,22 @@ export const SISTE_AAR = 2025
 
 /**
  * Regner ut skjermingsfradrag for en aksje på vanlig konto (VPS).
+ *
+ * KREDITFRADRAG (kreditfradrag-parameteren, valgfri): fradrag i norsk skatt
+ * for utenlandsk kildeskatt på utbytte, verifisert mot Skatteetaten (sktl.
+ * §§ 16-20 til 16-27):
+ * - Trekkes fra den BEREGNEDE NORSKE SKATTEN på utbyttet (etter skjerming og
+ *   oppjustering) — ikke fra selve utbyttebeløpet, og ikke fra grunnlaget.
+ * - Begrenset til norsk skatt på akkurat dette utbyttet — kan aldri gjøre
+ *   skatten negativ.
+ * - Beløpet brukeren oppgir skal allerede være begrenset til skatteavtalens
+ *   sats (f.eks. 15 % for USA), ikke nødvendigvis alt som ble trukket —
+ *   trekker megleren mer enn avtalesatsen (vanlig uten riktig skjema hos
+ *   utenlandsk myndighet), må resten kreves tilbake der, ikke i Norge.
+ * - Ubrukt kreditfradrag kan i realiteten fremføres i inntil 5 år (sktl.
+ *   § 16-22) — IKKE støttet her ennå; overskytende vises bare informativt.
  */
-export function beregnVPS({ kostpris, kurtasje = 0, ubenyttetSkjerming = 0, utbytte = 0, aar = SISTE_AAR }) {
+export function beregnVPS({ kostpris, kurtasje = 0, ubenyttetSkjerming = 0, utbytte = 0, kreditfradrag = 0, aar = SISTE_AAR }) {
   const rente = SKJERMINGSRENTE[aar] ?? SKJERMINGSRENTE[SISTE_AAR]
 
   const inngangsverdi = (Number(kostpris) || 0) + (Number(kurtasje) || 0)
@@ -42,9 +56,14 @@ export function beregnVPS({ kostpris, kurtasje = 0, ubenyttetSkjerming = 0, utby
   const nyUbenyttet = Math.max(0, skjerming - mottattUtbytte)
 
   // Skatt: skattepliktig beløp oppjusteres og beskattes
-  const skatt = skattepliktig * (EFFEKTIV_SATS / 100)
+  const skattFoerKredit = skattepliktig * (EFFEKTIV_SATS / 100)
   const utenSkjerming = mottattUtbytte * (EFFEKTIV_SATS / 100)
-  const spart = utenSkjerming - skatt
+  const spart = utenSkjerming - skattFoerKredit
+
+  const kredit = Math.max(0, Number(kreditfradrag) || 0)
+  const kreditfradragBrukt = Math.min(kredit, skattFoerKredit)
+  const kreditfradragUbrukt = Math.max(0, kredit - skattFoerKredit)
+  const skatt = skattFoerKredit - kreditfradragBrukt
 
   return {
     rente,
@@ -55,6 +74,9 @@ export function beregnVPS({ kostpris, kurtasje = 0, ubenyttetSkjerming = 0, utby
     utbytte: mottattUtbytte,
     brukt,
     skattepliktig,
+    skattFoerKredit,
+    kreditfradragBrukt,
+    kreditfradragUbrukt,
     skatt,
     utenSkjerming,
     spart,
