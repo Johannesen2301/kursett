@@ -8,3 +8,16 @@ export async function hentPriser(posisjoner){
   if(data?.feil) throw new Error(data.feil)
   return data
 }
+export async function hentBorsPriser(tickers){
+  if(tickers.length===0) return { priser:{} }
+  const { data, error }=await supabase.functions.invoke('bors',{ body:{ tickers } })
+  if(error) throw error
+  if(data?.feil) throw new Error(data.feil)
+  return data
+}
+export async function hentAksjeHistorikk(ticker){
+  const { data, error }=await supabase.functions.invoke('aksje-historikk',{ body:{ ticker } })
+  if(error) throw error
+  if(data?.feil) throw new Error(data.feil)
+  return data
+}

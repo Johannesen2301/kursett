@@ -110,6 +110,29 @@ a{color:inherit;text-decoration:none}
 .holdings .nm{font-weight:600}
 .holdings .mono{font-family:'JetBrains Mono';font-size:13px;color:var(--muted)}
 .holdings .wt{color:var(--ink);font-weight:600}
+.bors-range{position:relative;width:84px;height:5px;border-radius:3px;background:var(--line-soft)}
+.bors-range-fyll{position:absolute;top:-3px;width:2px;height:11px;border-radius:1px;background:var(--teal-deep);transform:translateX(-1px)}
+.bors-stripe{display:flex;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:16px;overflow:hidden}
+.bors-stripe-item{flex:1;min-width:160px;padding:12px 16px;border-right:1px solid var(--line-soft);font-size:13.5px}
+.bors-stripe-item:last-child{border-right:none}
+.bors-stripe-k{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600;margin-bottom:5px}
+.bors-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:14px 0}
+.bors-segment{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.bors-segment button{background:var(--card);border:none;border-right:1px solid var(--line);padding:8px 13px;font-family:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:.12s}
+.bors-segment button:last-child{border-right:none}
+.bors-segment button:hover{color:var(--ink)}
+.bors-segment button.on{background:var(--teal-deep);color:#fff}
+.bors-badge{display:inline-block;font-family:'JetBrains Mono';font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:20px}
+.bors-badge.opp{background:#E1F3EA;color:var(--up)}
+.bors-badge.ned{background:#FBEAE6;color:var(--down)}
+.bors-tabell tbody tr:hover td{background:var(--paper)}
+.aksje-nyhetsliste{display:flex;flex-direction:column}
+.aksje-nyhet{display:block;padding:13px 0;border-bottom:1px solid var(--line-soft);text-decoration:none;color:inherit}
+.aksje-nyhet:last-child{border-bottom:none}
+.aksje-nyhet-tittel{font-weight:600;font-size:14.5px;color:var(--ink)}
+.aksje-nyhet-tittel:hover{color:var(--teal-deep)}
+.aksje-nyhet-meta{font-size:12.5px;color:var(--faint);margin-top:4px}
+.nyhet-gjelder{background:var(--teal-tint);color:var(--teal-deep);font-weight:600;padding:2px 8px;border-radius:20px;margin-right:8px}
 .motor-rad{cursor:pointer}
 .motor-rad:hover{background:var(--paper)}
 .motor-input{width:100px;border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-family:'JetBrains Mono';font-size:13px;text-align:right;background:#fff;color:var(--ink)}
@@ -655,6 +678,15 @@ textarea:focus{outline:none;border-color:var(--teal-deep)}
 .kalk-hero h1{font-family:'Schibsted Grotesk';font-weight:800;font-size:32px;letter-spacing:-.02em;line-height:1.15}
 .kalk-hero p{font-size:16px;color:var(--muted);margin-top:14px;line-height:1.6;max-width:52ch;margin-left:auto;margin-right:auto}
 
+.kalk-meny{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:680px;margin:0 auto 28px}
+.kalk-meny-kort{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 8px;text-decoration:none;color:var(--ink);cursor:pointer;transition:.15s;text-align:center;font-family:inherit}
+.kalk-meny-kort:hover{border-color:var(--teal-deep);transform:translateY(-1px)}
+.kalk-meny-kort.on{border-color:var(--teal-deep);background:var(--teal-tint)}
+.kalk-meny-kort svg{width:21px;height:21px;stroke:var(--teal-deep);flex:0 0 21px}
+.kalk-meny-kort b{font-family:'Schibsted Grotesk';font-weight:700;font-size:13.5px;color:var(--ink)}
+.kalk-meny-kort span{font-size:11px;color:var(--muted)}
+@media (max-width:520px){ .kalk-meny{grid-template-columns:1fr 1fr} }
+
 .kalk-boks{max-width:680px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .kalk-faner{display:flex;border-bottom:1px solid var(--line)}
 .kalk-fane{flex:1;background:#F7FAFC;border:none;padding:15px 12px;font-family:inherit;font-weight:600;font-size:14.5px;color:var(--muted);cursor:pointer;transition:.12s}
@@ -717,6 +749,18 @@ textarea:focus{outline:none;border-color:var(--teal-deep)}
 .kalk-kort:hover{border-color:var(--teal-deep);transform:translateY(-1px)}
 .kalk-kort b{display:block;font-family:'Schibsted Grotesk';font-weight:700;font-size:15px;color:var(--ink)}
 .kalk-kort span{display:block;font-size:13.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+
+.forside-marked{max-width:900px;margin:36px auto 0;padding:24px 28px;background:var(--card);border:1px solid var(--line);border-radius:20px}
+.forside-marked-topp{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.forside-marked-tittel{font-family:'Schibsted Grotesk';font-weight:700;font-size:18px;color:var(--ink)}
+.forside-marked-sub{font-size:13px;color:var(--muted);margin-top:3px}
+.forside-marked-lenke{font-size:13.5px;font-weight:600;color:var(--teal-deep);text-decoration:none;white-space:nowrap}
+.forside-marked-lenke:hover{text-decoration:underline}
+.forside-marked-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.forside-marked-kort{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line-soft);border-radius:10px;padding:11px 13px;font-size:13.5px;font-weight:600;color:var(--ink)}
+.forside-marked-strek{color:var(--faint);font-weight:400}
+@media (max-width:640px){ .forside-marked-grid{grid-template-columns:1fr 1fr} }
+@media (max-width:420px){ .forside-marked-grid{grid-template-columns:1fr} }
 
 .kalk-funksjoner{max-width:900px;margin:36px auto 0;padding:38px 34px;background:var(--navy);border-radius:20px;text-align:center}
 .kalk-funksjoner h2{font-family:'Schibsted Grotesk';font-weight:700;font-size:22px;color:#fff;max-width:38ch;margin:0 auto;line-height:1.35}

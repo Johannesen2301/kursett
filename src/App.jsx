@@ -12,6 +12,9 @@ import Meldinger from './pages/Meldinger'
 import Rom from './pages/Rom'
 import Skattekunnskap from './pages/Skattekunnskap'
 import AskEllerVps from './pages/AskEllerVps'
+import Bors from './pages/Bors'
+import AksjeDetalj from './pages/AksjeDetalj'
+import Nyheter from './pages/Nyheter'
 import Personvern from './pages/Personvern'
 import Admin from './pages/Admin'
 import Kalkulator from './pages/Kalkulator'
@@ -26,6 +29,7 @@ export default function App() {
       <Route path="/kalkulator" element={<Kalkulator />} />
       <Route path="/skatteregler" element={<Skattekunnskap />} />
       <Route path="/ask-eller-vps" element={<AskEllerVps />} />
+      <Route path="/bors" element={<Bors />} />
       <Route path="/login" element={<Login />} />
 
       {/* ---------- APPEN: krever innlogging ---------- */}
@@ -42,6 +46,9 @@ export default function App() {
         <Route path="toppliste" element={<Toppliste />} />
         <Route path="profil" element={<Profil />} />
         <Route path="investor/:brukernavn" element={<InvestorProfil />} />
+        <Route path="bors" element={<Bors />} />
+        <Route path="aksje/:ticker" element={<AksjeDetalj />} />
+        <Route path="nyheter" element={<Nyheter />} />
         <Route path="meldinger" element={<KreverBrukernavn><Meldinger /></KreverBrukernavn>} />
         <Route path="rom" element={<KreverBrukernavn><Rom /></KreverBrukernavn>} />
         <Route path="personvern" element={<Personvern />} />

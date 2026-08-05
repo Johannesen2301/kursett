@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { parseTransaksjonerCSV, beregnLavesteSaldo } from '../lib/nordnetTransaksjoner'
 import Assistent from '../components/Assistent'
+import MarkedTeaser from '../components/MarkedTeaser'
 import Seo from '../components/Seo'
 
 function Felt({ label, hjelp, verdi, setVerdi, enhet = 'kr', valgfri }) {
@@ -34,10 +35,37 @@ function Felt({ label, hjelp, verdi, setVerdi, enhet = 'kr', valgfri }) {
 
 const AAR_VALG = Object.keys(SKJERMINGSRENTE).map(Number).sort((a, b) => b - a)
 
+// Samme tynne linje-ikon-stil som resten av siden (Sidebar, kalk-funksjon) —
+// gjenbruker to av ikonene som allerede finnes for Børs og Skatteregler der.
+const MENY = [
+  { navn: 'Kalkulator', sub: 'Skjermingsfradrag', ikon: 'M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01' },
+  { navn: 'Børs', sub: 'Aksjescreener', ikon: 'M4 19h16M6 19V9l4-4 4 4 4-8v18', href: '/bors' },
+  { navn: 'Skatteregler', sub: 'Forklart enkelt', ikon: 'M9 7h6M9 12h6M9 17h4M5 3h14v18H5z', href: '/skatteregler' },
+  { navn: 'ASK vs VPS', sub: 'Hva lønner seg?', ikon: 'M3 3h8v18H3zM13 3h8v18h-8z', href: '/ask-eller-vps' },
+]
+
+function MenyKort({ navn, sub, ikon, href, aktiv, onClick }) {
+  const innhold = (
+    <>
+      <svg viewBox="0 0 24 24" fill="none" strokeWidth="1.7"><path d={ikon} /></svg>
+      <b>{navn}</b>
+      <span>{sub}</span>
+    </>
+  )
+  if (href) return <Link to={href} className="kalk-meny-kort">{innhold}</Link>
+  return <button type="button" className={'kalk-meny-kort' + (aktiv ? ' on' : '')} onClick={onClick}>{innhold}</button>
+}
+
 export default function Kalkulator() {
   const [type, setType] = useState('vps')
   const [aar, setAar] = useState(SISTE_AAR)
+  const [visKalk, setVisKalk] = useState(false)
+  const kalkRef = useRef(null)
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (visKalk) kalkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [visKalk])
 
   // VPS
   const [kostpris, setKostpris] = useState('')
@@ -166,6 +194,7 @@ export default function Kalkulator() {
           <span className="kur">Kur</span><span className="sett">sett</span><span className="d" />
         </div>
         <div className="kalk-nav">
+          <Link to="/bors" className="kalk-lenke">Børs</Link>
           <Link to="/skatteregler" className="kalk-lenke">Skatteregler</Link>
           <Link to="/login" className="kalk-logginn">Logg inn</Link>
         </div>
@@ -179,6 +208,15 @@ export default function Kalkulator() {
         </p>
       </div>
 
+      <div className="kalk-meny">
+        {MENY.map((m) => (
+          <MenyKort key={m.navn} {...m} aktiv={m.navn === 'Kalkulator' && visKalk}
+            onClick={m.href ? undefined : () => setVisKalk((v) => !v)} />
+        ))}
+      </div>
+
+      {visKalk && (
+      <div ref={kalkRef}>
       <div className="kalk-boks">
         <div className="kalk-faner">
           <button className={'kalk-fane' + (type === 'vps' ? ' on' : '')} onClick={() => setType('vps')}>
@@ -541,6 +579,10 @@ export default function Kalkulator() {
           )}
         </div>
       )}
+      </div>
+      )}
+
+      <MarkedTeaser />
 
       <div className="kalk-funksjoner">
         <h2>Kalkulatoren over regner ut én aksje av gangen. Gratis konto gjør det automatisk for hele porteføljen.</h2>
@@ -587,6 +629,10 @@ export default function Kalkulator() {
           <Link to="/ask-eller-vps" className="kalk-kort">
             <b>ASK eller VPS — hva lønner seg?</b>
             <span>Forskjellen på skatt, skjerming og FIFU, forklart</span>
+          </Link>
+          <Link to="/bors" className="kalk-kort">
+            <b>Aksjescreener</b>
+            <span>Kurs, dagsendring og direkteavkastning for aksjer i Norge, USA og Asia</span>
           </Link>
           <Link to="/login" className="kalk-kort">
             <b>Har du mange aksjer?</b>

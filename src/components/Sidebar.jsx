@@ -4,6 +4,8 @@ import { useVarsler } from '../context/VarselContext'
 
 const NAV = [
   { to: '/app/portefolje', label: 'Min portefølje', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
+  { to: '/app/bors', label: 'Børs', icon: 'M4 19h16M6 19V9l4-4 4 4 4-8v18' },
+  { to: '/app/nyheter', label: 'Nyheter', icon: 'M4 4h13v16l-3-2-3 2-3-2-3 2-1-2V4ZM9 9h5M9 13h5' },
   { to: '/app/toppliste', label: 'Toppliste', icon: 'M4 21V11M10 21V4M16 21v-7M22 21H2' },
   { to: '/app/rom', label: 'Rom', icon: 'M4 4h16v13H8l-4 4zM8 9h8M8 13h5' },
   { to: '/app/meldinger', label: 'Meldinger', icon: 'M9 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 20a7 7 0 0 1 14 0M17 5a3 3 0 0 1 0 7M15 20a7 7 0 0 0-2-5' },

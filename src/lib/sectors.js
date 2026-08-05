@@ -1,5 +1,5 @@
-export const SEKTOR_FARGE = { energi:'#4E7A8A', sjomat:'#6FA08C', telekom:'#8E7CA8', finans:'#C2A05A', industri:'#A8836A', shipping:'#9C6B52', fornybar:'#7E9A5C', annet:'#B8B3A6' }
-export const SEKTOR_NAVN = { energi:'Energi', sjomat:'Sjømat', telekom:'Telekom', finans:'Finans', industri:'Industri', shipping:'Shipping', fornybar:'Fornybar', annet:'Annet' }
+export const SEKTOR_FARGE = { energi:'#4E7A8A', sjomat:'#6FA08C', telekom:'#8E7CA8', finans:'#C2A05A', industri:'#A8836A', shipping:'#9C6B52', fornybar:'#7E9A5C', teknologi:'#5477A6', helse:'#BD6B6B', forbruk:'#B87A93', eiendom:'#8A9A6E', annet:'#B8B3A6' }
+export const SEKTOR_NAVN = { energi:'Energi', sjomat:'Sjømat', telekom:'Telekom', finans:'Finans', industri:'Industri', shipping:'Shipping', fornybar:'Fornybar', teknologi:'Teknologi', helse:'Helse', forbruk:'Forbruk', eiendom:'Eiendom', annet:'Annet' }
 const REGLER = [
   ['energi',['equinor','aker bp','vår energi','var energi','bluenord','dno','okea','panoro','subsea','aker solutions','seadrill','borr']],
   ['sjomat',['mowi','salmar','lerøy','leroy','austevoll','grieg seafood','bakkafrost','norway royal','nrs']],
