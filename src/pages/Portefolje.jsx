@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { parseNordnetCSV } from '../lib/nordnet'
 import { finnSektor, SEKTOR_FARGE } from '../lib/sectors'
-import { beregnPortefolje, formaterKr, formaterPst } from '../lib/portfolio'
+import { beregnPortefolje, formaterKr, formaterPst, formaterUtbytteMelding } from '../lib/portfolio'
 import { hentPriser } from '../lib/prices'
+import { oppdagRom, sendRomMelding } from '../lib/rooms'
 import Band from '../components/Band'
 
 function KontoVelgerFelt({ nyKontoNavn, setNyKontoNavn, nyKontoType, endreKontoType, vpsBekreftet, setVpsBekreftet, navnPlaceholder }) {
@@ -48,6 +49,13 @@ export default function Portefolje() {
   const [vpsBekreftet, setVpsBekreftet] = useState(false)
   const [slettKontoNavn, setSlettKontoNavn] = useState(null)
   const [sletterKonto, setSletterKonto] = useState(false)
+  const [delPos, setDelPos] = useState(null)
+  const [mineRomDel, setMineRomDel] = useState([])
+  const [lasterRomDel, setLasterRomDel] = useState(false)
+  const [delRomId, setDelRomId] = useState('')
+  const [deler, setDeler] = useState(false)
+  const [delFeil, setDelFeil] = useState('')
+  const [delSuksess, setDelSuksess] = useState(false)
 
   // VPS kjører en automatisk, konkret skatteberegning (kostpris som skjermingsgrunnlag) —
   // ASK utelates bare fra Min skatt til brukeren sjekker det. Feilmerking i VPS-retning
@@ -134,6 +142,36 @@ export default function Portefolje() {
       setFeil(err.message)
     } finally {
       setSletterKonto(false)
+    }
+  }
+
+  async function apneDel(p) {
+    setDelPos(p); setDelFeil(''); setDelSuksess(false); setDelRomId('')
+    setLasterRomDel(true)
+    try {
+      const alle = await oppdagRom()
+      setMineRomDel(alle.filter((r) => r.er_medlem))
+    } catch (err) {
+      setDelFeil(err.message)
+    } finally {
+      setLasterRomDel(false)
+    }
+  }
+
+  function lukkDel() { setDelPos(null) }
+
+  async function delTilRom() {
+    if (!delPos || !delRomId) return
+    const tekst = formaterUtbytteMelding(delPos)
+    if (!tekst) return
+    setDeler(true); setDelFeil('')
+    try {
+      await sendRomMelding(user.id, delRomId, tekst)
+      setDelSuksess(true)
+    } catch (err) {
+      setDelFeil(err.message)
+    } finally {
+      setDeler(false)
     }
   }
 
@@ -256,10 +294,49 @@ export default function Portefolje() {
       <div className="panel">
         <div className="panel-h"><h2>Beholdning</h2></div>
         <table className="holdings">
-          <thead><tr><th>Aksje</th><th className="r">Antall</th><th className="r">Markedsverdi</th><th className="r">Dir.avk.</th><th className="r">Vekt</th></tr></thead>
-          <tbody>{pf.posisjoner.map((p, i) => (<tr key={i}><td><div className="tick"><span className="swdot" style={{ background: SEKTOR_FARGE[p.sektor] }} /><span className="nm">{p.navn}</span></div></td><td className="r mono" data-l="Antall">{p.antall != null ? p.antall.toLocaleString('nb-NO') : '–'}</td><td className="r mono" data-l="Markedsverdi">{formaterKr(p.liveVerdi)}</td><td className="r mono" data-l="Dir.avk.">{p.direkteavkastning != null ? formaterPst(p.direkteavkastning) : '–'}</td><td className="r mono wt" data-l="Vekt">{p.vekt.toFixed(1)}%</td></tr>))}</tbody>
+          <thead><tr><th>Aksje</th><th className="r">Antall</th><th className="r">Markedsverdi</th><th className="r">Dir.avk.</th><th className="r">Vekt</th><th></th></tr></thead>
+          <tbody>{pf.posisjoner.map((p, i) => (<tr key={i}><td><div className="tick"><span className="swdot" style={{ background: SEKTOR_FARGE[p.sektor] }} /><span className="nm">{p.navn}</span></div></td><td className="r mono" data-l="Antall">{p.antall != null ? p.antall.toLocaleString('nb-NO') : '–'}</td><td className="r mono" data-l="Markedsverdi">{formaterKr(p.liveVerdi)}</td><td className="r mono" data-l="Dir.avk.">{p.direkteavkastning != null ? formaterPst(p.direkteavkastning) : '–'}</td><td className="r mono wt" data-l="Vekt">{p.vekt.toFixed(1)}%</td><td className="r">{formaterUtbytteMelding(p) && (<button type="button" className="btn ghost" style={{ padding: '4px 12px', fontSize: 12.5 }} onClick={() => apneDel(p)}>Del</button>)}</td></tr>))}</tbody>
         </table>
       </div>
+
+      {delPos && (
+        <div className="mod-overlay" onClick={(e) => { if (e.target.className === 'mod-overlay') lukkDel() }}>
+          <div className="mod-dialog">
+            {delSuksess ? (
+              <>
+                <h3>Delt!</h3>
+                <p className="mod-tekst">Meldingen er sendt til rommet.</p>
+                <button className="btn" style={{ marginTop: 18, width: '100%' }} onClick={lukkDel}>Lukk</button>
+              </>
+            ) : (
+              <>
+                <h3>Del utbytte fra {delPos.navn}</h3>
+                <p className="mod-tekst">{formaterUtbytteMelding(delPos)}</p>
+                {lasterRomDel ? (
+                  <div className="muted-note" style={{ marginTop: 14 }}>Laster rom …</div>
+                ) : mineRomDel.length === 0 ? (
+                  <div className="muted-note" style={{ marginTop: 14 }}>Du er ikke medlem av noen rom ennå.</div>
+                ) : (
+                  <div className="field" style={{ marginTop: 16 }}>
+                    <span>Velg rom</span>
+                    <select className="kalk-select" value={delRomId} onChange={(e) => setDelRomId(e.target.value)}>
+                      <option value="">— velg rom —</option>
+                      {mineRomDel.map((r) => (<option key={r.id} value={r.id}>#{r.navn}</option>))}
+                    </select>
+                  </div>
+                )}
+                {delFeil && <div className="import-feil" style={{ marginTop: 14 }}>{delFeil}</div>}
+                <div className="mod-knapper">
+                  <button className="btn ghost" onClick={lukkDel} disabled={deler}>Avbryt</button>
+                  <button className="btn" disabled={!delRomId || deler} onClick={delTilRom}>
+                    {deler ? 'Deler …' : 'Del i rommet'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {slettKontoNavn && (
         <div className="mod-overlay" onClick={(e) => { if (e.target.className === 'mod-overlay') setSlettKontoNavn(null) }}>

@@ -26,3 +26,16 @@ export function beregnPortefolje(posisjonerRaa,prisdata){
 }
 export function formaterKr(n){ if(n==null)return '–'; return Math.round(n).toLocaleString('nb-NO')+' kr' }
 export function formaterPst(n,tegn=false){ if(n==null)return '–'; const s=n.toLocaleString('nb-NO',{minimumFractionDigits:1,maximumFractionDigits:1}); return (tegn&&n>0?'+':'')+s+' %' }
+// Bygger en delbar tekstmelding for siste utbytte fra én posisjon. Deler kun beløp per
+// aksje og direkteavkastning (offentlig markedsdata) — aldri antall aksjer eller totalt
+// mottatt beløp, som ville avslørt posisjonsstørrelsen (jf. personvern-notatet i Portefølje).
+export function formaterUtbytteMelding(p){
+  if(!p?.utbytter?.length) return null
+  const siste=[...p.utbytter].sort((a,b)=>b.dato-a.dato)[0]
+  if(!siste?.belop) return null
+  const dato=new Date(siste.dato*1000).toLocaleDateString('nb-NO',{day:'numeric',month:'long'})
+  const valuta=!p.liveValuta||p.liveValuta==='NOK'?'kr':p.liveValuta
+  const belop=siste.belop.toLocaleString('nb-NO',{minimumFractionDigits:2,maximumFractionDigits:2})
+  const avk=p.direkteavkastning!=null?` — direkteavkastning ${formaterPst(p.direkteavkastning)}`:''
+  return `📈 ${p.navn} betalte ${belop} ${valuta}/aksje i utbytte ${dato}${avk}`
+}
